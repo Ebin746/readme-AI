@@ -24,3 +24,13 @@ body {
   color: var(--foreground);
   font-family: Arial, Helvetica, sans-serif;
 }
+/* app/globals.css */
+.prose pre {
+  white-space: pre-wrap !important;
+  word-break: break-word !important;
+}
+
+.prose code {
+  word-break: break-word !important;
+  white-space: pre-wrap !important;
+}

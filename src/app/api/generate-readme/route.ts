@@ -18,55 +18,78 @@ export async function POST(req: Request) {
 
        // Improved prompt structure
        const prompt = `
-       You are an expert technical writer. Your task is to generate a **well-structured, professional README** for a software project. 
-       The project files and their corresponding content are provided below. 
+       You are an expert technical writer specializing in open-source documentation. Generate a professional, comprehensive README.md file following industry best practices. Use this structure and guidelines:
        
-       ### **Instructions:**
-       - **Analyze** the project structure and files.
-       - **Understand** the project purpose based on the files and their content.
-       - **Write** a high-quality README that follows best practices.
-       
-       ### **README Structure to Follow:**
+       ### **README Structure**
        1. **Project Title**  
-          - Clearly state the project name.
-          - Provide a short, engaging tagline if possible.
+          - Clear name with optional emoji decoration
+          - Badges for version, license, build status, etc.
+          - Brief engaging tagline
        
-       2. **Project Description**  
-          - Briefly explain what the project does.
-          - Mention its key features and technologies used.
+       2. **Table of Contents** (with anchor links)
        
-       3. **Installation Guide**  
-          - Provide step-by-step setup instructions.
-          - Include commands for dependencies and environment setup.
+       3. **Project Overview**
+          - **Description**: Clear explanation of purpose and value proposition
+          - **Features**: Bullet list of key features with emoji icons
+          - **Tech Stack**: Table of technologies with categories (Frontend, Backend, etc.)
        
-       4. **Usage Instructions**  
-          - Explain how users can run and use the project.
-          - Provide code examples if necessary.
+       4. **Getting Started**
+          - **Prerequisites**: List required software/accounts
+          - **Installation**: 
+            - Step-by-step commands with code blocks
+            - Environment variables setup guide
+            - Configuration instructions
+          
+       5. **Development Guide**
+          - Local setup instructions
+          - Building from source
+          - Testing procedures
+          - Deployment workflow
        
-       5. **File Structure Overview**  
-          - Summarize the key files and folders.
-          - Briefly describe their purpose.
        
-       6. **Contribution Guidelines**  
-          - Explain how developers can contribute (issues, PRs, coding standards).
+       6. **Contributing**
+          - Contribution workflow
+          - Code style guidelines
+          - Issue/bug reporting process
+          - PR submission standards
        
-       7. **License Information** *(if applicable)*  
-          - Specify the license type and link to the full license file.
+       7. **License**
+          - Clear license statement with link to LICENSE file
+          - Copyright notice
        
-       ### **Project Files and Contents:**
+       8. **Acknowledgments**
+          - Third-party assets
+          - Inspiration sources
+          - Contributor recognition
+       
+       ### **Style Guidelines**
+       - Use proper Markdown formatting
+       - Include relevant emoji decorators (🎯 for objectives, 🛠️ for tools, etc.)
+
+       - Use tables for technical specifications
+       - Include code blocks with syntax highlighting
+       - Add warning/admonition blocks for important notes
+       - Maintain professional yet approachable tone
+       
+       ### **Technical Requirements**
+       - Generate badge URLs using shields.io
+       - Create environment variable examples in .env format
+       - Include common development commands (npm run dev/build/test)
+       - Mention CI/CD pipeline integration points
+       
+       ### **Project Files Analysis**
        \`\`\`
        ${content}
        \`\`\`
        
-       Generate a **concise, professional, and well-formatted** README based on this input.
-       output should in structred format
+       Generate a production-ready README that follows these specifications exactly. Prioritize clarity, completeness, and professional presentation.
        `;
-       
 
     try {
-        const genAI = new GoogleGenerativeAI("AIzaSyB9JFB4drSiwZBmSdQVmbs8erueoPNWhLc");
+        const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY as string);
         const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
         const result = await model.generateContent(prompt);
+        console.log("rep",result.response.text())
         const reply = result.response.text();
         return NextResponse.json({ reply: `\`\`\`markdown\n${reply}\n\`\`\`` })
     } catch (error) {
