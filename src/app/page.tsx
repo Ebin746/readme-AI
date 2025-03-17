@@ -1,4 +1,4 @@
-"use client";
+"use client"
 import { useState } from 'react';
 import Markdown from 'react-markdown';
 
@@ -37,12 +37,21 @@ export default function Home() {
       if (!readmeResponse.ok) throw new Error('Failed to generate README');
 
       const data = await readmeResponse.json();
-      setReadme(data.reply);
+      const cleanedReply = data.reply.replace(/```markdown/g, '').replace(/```/g, '');
+      setReadme(cleanedReply);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'An error occurred');
     } finally {
       setLoading(false);
     }
+  };
+
+  const handleCopy = () => {
+    navigator.clipboard.writeText(readme).then(() => {
+      alert('README content copied to clipboard!');
+    }).catch(err => {
+      alert('Failed to copy content: ' + err);
+    });
   };
 
   return (
@@ -79,10 +88,18 @@ export default function Home() {
         )}
 
         {readme && (
+          
           <div className="bg-white rounded-lg shadow-md p-6 w-full">
+               <button
+              onClick={handleCopy}
+              className="mt-4 px-4 py-2 bg-green-600 text-white rounded-lg hover:bg-green-700 transition-colors"
+            >
+              Copy README
+            </button>
             <div className="prose max-w-none text-black w-full min-w-0 overflow-x-auto">
               <Markdown>{readme}</Markdown>
             </div>
+         
           </div>
         )}
 
