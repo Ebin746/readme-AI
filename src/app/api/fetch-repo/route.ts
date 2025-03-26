@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
+import { extractContent } from "@/utils/extractiveSummarization";
 
 // Exclude lists
 const excludeList = [
@@ -48,6 +49,7 @@ const getFiles = (dir: string, baseDir: string, files: { name: string; content: 
 
 export async function POST(req: Request) {
     try {
+       
         const { repoUrl } = await req.json();
         if (!repoUrl || !repoUrl.startsWith("https://github.com/")) {
             return NextResponse.json({ error: "Invalid GitHub URL" }, { status: 400 });
@@ -88,8 +90,12 @@ export async function POST(req: Request) {
 
         // Write README to finalReadme directory
         fs.writeFileSync(path.join(finalReadmeDir, "README.md"), readmeContent, "utf8");
+        
+
+    
 
         return NextResponse.json({ success: true, message: "README generated!", repo: repoName });
+
     } catch (error: any) {
         return NextResponse.json({ error: error.message }, { status: 500 });
     }
