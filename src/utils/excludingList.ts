@@ -35,7 +35,7 @@ const excludeList = [
     "hardhat.config.js", "hardhat.config.ts", "hardhat.config.mjs",
     "foundry.toml", ".forge-cache", "forge.out",
     "truffle-config.js", "truffle-config.ts", "truffle.js",
-    "ganache-db", "ganache_data", "build/contracts",
+    "ganache-db", "ganache_data", "build/contracts","artifacts/",
     
     // **Python & Flask/Django exclusions**
     ".venv", "venv", "__pycache__", "migrations", "db.sqlite3",
