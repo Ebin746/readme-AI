@@ -1,24 +1,19 @@
 import nlp from "compromise";
 import { TfIdf } from "natural";
 
-export function extractContent(text: string, sentenceCount: number = 5): string {
-    if (sentenceCount <= 0) {
-        throw new Error("sentenceCount must be greater than 0");
-    }
+export default function extractContent(text: string): string {
 
-    const sentences = nlp(text).sentences().out("array"); // Extract sentences
-
+    const sentences: string[] = nlp(text).sentences().out("array"); // Extract sentences
+const sentenceCount = Math.ceil(sentences.length * 0.6); 
     if (sentences.length === 0) {
         return ""; // Return empty string if no sentences are found
     }
-
-    if (sentences.length <= sentenceCount) {
-        return sentences.join(" "); // Return full text if too short
-    }
+    console.log("sentence",sentences.length)
+    
 
     const tfidf = new TfIdf();
-    sentences.forEach((sentence: string | string[] | Record<string, string>) => tfidf.addDocument(sentence)); // Add sentences to TF-IDF model
-
+    sentences.forEach((sentence: string) => tfidf.addDocument(sentence)); // Ensure sentence is a string
+  
     const rankedSentences = sentences
         .map((sentence: string, index: number) => {
             let score = 0;
@@ -26,14 +21,12 @@ export function extractContent(text: string, sentenceCount: number = 5): string 
                 score += term.tfidf;
             });
 
-            return { sentence, score };
+            return { sentence, score }; // Ensure sentence and score are included
         })
-        .sort((a: { score: number; }, b: { score: number; }) => b.score - a.score) // Sort sentences by importance
+        .sort((a, b) => b.score - a.score) // Sort sentences by importance
         .slice(0, sentenceCount) // Pick top N sentences
-        .map((item: { sentence: string; }) => item.sentence)
-        .join(" "); // Join sentences with space
+        .map((item) => item.sentence) // Extract sentences
+        .join(" "); // Join sentences with spaces
 
     return rankedSentences;
 }
-
-// Example usage:

@@ -2,30 +2,7 @@ import { NextResponse } from "next/server";
 import fs from "fs";
 import path from "path";
 import { execSync } from "child_process";
-import { extractContent } from "@/utils/extractiveSummarization";
-
-// Exclude lists
-const excludeList = [
-    "node_modules", ".npm", ".yarn", ".pnp", "package-lock.json", "yarn.lock", "pnpm-lock.yaml",
-    "dist", "build", "out", ".next", ".vercel", ".turbo", "coverage", ".expo", ".expo-shared",
-    "cypress/screenshots", "cypress/videos",
-    "vite.config.js", "vite.config.ts", "next.config.js", "next.config.mjs", "webpack.config.js",
-    "babel.config.js", ".babelrc", "tsconfig.json", "jsconfig.json", ".eslintrc.js", ".eslintignore",
-    ".prettierrc", ".prettierignore", ".editorconfig", ".stylelintrc", ".lintstagedrc",
-    ".env", ".env.local", ".env.development", ".env.production", ".env.test",
-    "npm-debug.log", "yarn-error.log", "pnpm-debug.log", ".DS_Store", "Thumbs.db", "debug.log",
-    "public", "assets", "static", "favicon.ico", "logo192.png", "logo512.png",
-    ".github", ".gitlab", ".circleci", ".husky", "jest.config.js", "jest.setup.js",
-    ".vscode", ".idea", ".project", ".settings", ".classpath", ".factorypath",
-    ".git", ".gitignore"
-];
-
-const excludeExtensions = [
-    ".png", ".jpg", ".jpeg", ".gif", ".webp", ".svg", ".ico",
-    ".ttf", ".woff", ".woff2", ".otf", ".eot",
-    ".mp4", ".mp3", ".wav", ".mov", ".avi",
-    ".zip", ".rar", ".tar.gz"
-];
+import { excludeList,excludeExtensions } from "@/utils/excludingList";
 
 const getFiles = (dir: string, baseDir: string, files: { name: string; content: string }[] = []): { name: string; content: string }[] => {
     fs.readdirSync(dir).forEach((file) => {

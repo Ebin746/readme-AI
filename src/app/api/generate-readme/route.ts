@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import fs from "fs"
 import path from "path"
+import extractContent from "@/utils/extractiveSummarization";
 export async function POST(req: Request) {
        // Define directory and file path
        const finalReadme = "finalReadme";
@@ -14,7 +15,8 @@ export async function POST(req: Request) {
        }
 
        // Read file content
-       const content = fs.readFileSync(readmeFilePath, "utf8");
+       let content = fs.readFileSync(readmeFilePath, "utf8");
+       content=extractContent(content);
 
        // Improved prompt structure
        const prompt = `
