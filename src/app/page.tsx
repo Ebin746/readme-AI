@@ -20,23 +20,44 @@ export default function Home() {
     setReadme("");
 
     try {
-      const cloneResponse = await fetch("/api/fetch-repo", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ repoUrl }),
-      });
+     // Construct GraphQL request body
+     const readmeResponse = await fetch("/api/graphql", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        query: `
+          mutation GenerateReadme($repoUrl: String!) {
+            generateReadme(repoUrl: $repoUrl) {
+              success
+              content
+              error
+            }
+          }
+        `,
+        variables: { repoUrl },
+      }),
+    });
 
-      if (!cloneResponse.ok) throw new Error("❌ Failed to clone repository");
+    if (!readmeResponse.ok) throw new Error("❌ Failed to generate README");
 
-      const readmeResponse = await fetch("/api/generate-readme", {
-        method: "POST",
-      });
+    const data = await readmeResponse.json();
 
-      if (!readmeResponse.ok) throw new Error("❌ Failed to generate README");
+    // Handle any API errors in the response
+    if (!data?.data?.generateReadme?.success) {
+      throw new Error(data?.data?.generateReadme?.error || "Unknown error");
+    }
 
-      const data = await readmeResponse.json();
-      const cleanedReply = data.reply.replace(/```markdown/g, "").replace(/```/g, "");
+    const content = data.data.generateReadme.content;
+
+    // Ensure content is not undefined or null before replacing
+    if (content) {
+      const cleanedReply = content
+        .replace(/```markdown/g, "")
+        .replace(/```/g, "");
       setReadme(cleanedReply);
+    } else {
+      throw new Error("❌ No content returned from the API");
+    }
     } catch (err) {
       setError(err instanceof Error ? err.message : "⚠️ An error occurred.");
     } finally {
@@ -51,6 +72,7 @@ export default function Home() {
       .catch((err) => alert("❌ Failed to copy: " + err));
   };
 
+
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-black via-purple-900 to-gray-900 p-4 sm:p-6">
       <div className="w-full max-w-3xl bg-white/10 backdrop-blur-md shadow-2xl rounded-2xl p-6 sm:p-8 border border-purple-400/50">
@@ -58,7 +80,9 @@ export default function Home() {
         <h1 className="text-3xl sm:text-4xl font-extrabold text-white text-center animate-fade-in">
           🚀 GitHub <span className="text-purple-400">README Generator</span>
         </h1>
-        <p className="text-gray-300 text-center mt-2 text-sm sm:text-base">Create professional README files instantly.</p>
+        <p className="text-gray-300 text-center mt-2 text-sm sm:text-base">
+          Create professional README files instantly.
+        </p>
 
         {/* Form Section */}
         <form onSubmit={handleGenerate} className="mt-6 space-y-4">
@@ -92,7 +116,9 @@ export default function Home() {
         {readme && (
           <div className="mt-6 p-4 sm:p-6 bg-black/30 border border-purple-500 rounded-lg shadow-md">
             <div className="flex flex-col sm:flex-row justify-between items-center mb-4 space-y-2 sm:space-y-0">
-              <h2 className="text-base sm:text-lg font-semibold text-white">📄 Generated README</h2>
+              <h2 className="text-base sm:text-lg font-semibold text-white">
+                📄 Generated README
+              </h2>
               <button
                 onClick={handleCopy}
                 className="px-4 py-2 bg-green-500 text-white rounded-lg hover:bg-green-600 transition-all shadow-lg hover:scale-105 active:scale-95 text-sm sm:text-base"
