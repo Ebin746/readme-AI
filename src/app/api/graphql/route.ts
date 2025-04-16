@@ -23,12 +23,13 @@ const typeDefs = gql`
 
 const resolvers = {
   Mutation: {
-    async generateReadme(_: any, { repoUrl }: { repoUrl: string }) {
+    async generateReadme(_: unknown, { repoUrl }: { repoUrl: string }) {
       try {
         const content = await generateReadmeFromRepo(repoUrl);
         return { success: true, content, error: null };
-      } catch (err: any) {
-        return { success: false, content: null, error: err.message };
+      } catch (err: unknown) {
+        const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
+        return { success: false, content: null, error: errorMessage };
       }
     },
   },
