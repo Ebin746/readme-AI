@@ -1,9 +1,8 @@
-// app/api/graphql/route.ts
-
 import { ApolloServer } from "@apollo/server";
 import { startServerAndCreateNextHandler } from "@as-integrations/next";
 import { gql } from "graphql-tag";
-import { generateReadmeFromRepo } from "@/utils/readmeGenerator"; // Your function for generating README
+import { generateReadmeFromRepo } from "@/utils/readmeGenerator";
+import { NextRequest } from "next/server";
 
 // Define GraphQL Schema
 const typeDefs = gql`
@@ -44,8 +43,14 @@ const server = new ApolloServer({
   resolvers,
 });
 
-// Create Next.js Handler for GraphQL
-const handler = startServerAndCreateNextHandler(server);
+// Create the Next.js handler
+const apolloHandler = startServerAndCreateNextHandler(server);
 
-// Export the handler directly without manually passing context
-export { handler as GET, handler as POST };
+// Define the GET and POST handlers with correct parameters
+export async function GET(request: NextRequest) {
+  return apolloHandler(request);
+}
+
+export async function POST(request: NextRequest) {
+  return apolloHandler(request);
+}
