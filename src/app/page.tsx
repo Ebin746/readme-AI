@@ -8,7 +8,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleGenerate = async (e) => {
+  const handleGenerate = async (e: { preventDefault: () => void; }) => {
     e.preventDefault();
     if (!repoUrl) {
       setError("⚠️ Please enter a valid GitHub URL.");
