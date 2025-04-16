@@ -26,7 +26,7 @@ export default function extractContent(text: string): string {
         })
         .sort((a: { score: number; }, b: { score: number; }) => b.score - a.score)
         .slice(0, sentenceCount)
-        .map((s: { sentence: any; }) => s.sentence)
+        .map((s: { sentence: unknown; }) => s.sentence)
         .join(" ");
 
     return ranked;

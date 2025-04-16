@@ -1,11 +1,18 @@
-// utils/readmeGenerator.ts
 import { GoogleGenerativeAI } from "@google/generative-ai";
 import extractContent from "@/utils/extractiveSummarization";
 import { excludeList, excludeExtensions } from "@/utils/excludingList";
 
 const GITHUB_API_BASE = "https://api.github.com/repos";
 
-async function fetchGitHubFiles(owner: string, repo: string, path = "") {
+// Define the type for GitHub API file/directory response
+interface GitHubFile {
+  type: "file" | "dir";
+  path: string;
+  name: string;
+  download_url?: string; // Only present for files
+}
+
+async function fetchGitHubFiles(owner: string, repo: string, path = ""): Promise<GitHubFile[]> {
   const url = `${GITHUB_API_BASE}/${owner}/${repo}/contents/${path}`;
   const response = await fetch(url, {
     headers: {
@@ -17,13 +24,13 @@ async function fetchGitHubFiles(owner: string, repo: string, path = "") {
   const data = await response.json();
   if (!Array.isArray(data)) throw new Error("Unexpected GitHub API response");
 
-  let files: any[] = [];
+  let files: GitHubFile[] = [];
   for (const item of data) {
     if (item.type === "dir") {
       const subFiles = await fetchGitHubFiles(owner, repo, item.path);
       files = files.concat(subFiles);
     } else {
-      files.push(item);
+      files.push(item as GitHubFile);
     }
   }
   return files;
@@ -50,7 +57,7 @@ export async function generateReadmeFromRepo(repoUrl: string): Promise<string> {
       !excludeList.some(ex => file.path.includes(ex)) &&
       !excludeExtensions.some(ext => file.name.endsWith(ext))
     ) {
-      const content = await fetchFileContent(file.download_url);
+      const content = await fetchFileContent(file.download_url!); // `download_url` is guaranteed for files
       readmeContent += `- ${file.path}\n`;
       codeFiles[file.path] = content;
     }

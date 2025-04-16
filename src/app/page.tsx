@@ -99,7 +99,7 @@ export default function Home() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-5 sm:px-6 py-3 text-lg font-semibold bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-lg shadow-[0_4px_0px_#5a1ea1,0_6px_10px_rgba(0,0,0,0.5)] transition-all transform hover:translate-y-1 hover:shadow-[0_2px_0px_#5a1ea1,0_3px_8px_rgba(0,0,0,0.5)] active:shadow-[0_0px_0px_#5a1ea1,0_0px_5px_rgba(0,0,0,0.4)] active:translate-y-2 text-sm sm:text-base"
+            className="w-full px-5 sm:px-6 py-3 text-lg font-semibold bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-lg shadow-[0_4px_0px_#5a1ea1,0_6px_10px_rgba(0,0,0,0.5)] transition-all transform hover:translate-y-1 hover:shadow-[0_2px_0px_#5a1ea1,0_3px_8px_rgba(0,0,0,0.5)] active:shadow-[0_0px_0px_#5a1ea1,0_0px_5px_rgba(0,0,0,0.4)] active:translate-y-2 sm:text-base"
           >
             {loading ? "⚡ Processing..." : "✨ Generate README"}
           </button>
