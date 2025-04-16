@@ -8,7 +8,7 @@ export default function Home() {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
 
-  const handleGenerate = async (e: React.FormEvent) => {
+  const handleGenerate = async (e) => {
     e.preventDefault();
     if (!repoUrl) {
       setError("⚠️ Please enter a valid GitHub URL.");
@@ -20,44 +20,41 @@ export default function Home() {
     setReadme("");
 
     try {
-     // Construct GraphQL request body
-     const readmeResponse = await fetch("/api/graphql", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        query: `
-          mutation GenerateReadme($repoUrl: String!) {
-            generateReadme(repoUrl: $repoUrl) {
-              success
-              content
-              error
+      const readmeResponse = await fetch("/api/graphql", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: `
+            mutation GenerateReadme($repoUrl: String!) {
+              generateReadme(repoUrl: $repoUrl) {
+                success
+                content
+                error
+              }
             }
-          }
-        `,
-        variables: { repoUrl },
-      }),
-    });
+          `,
+          variables: { repoUrl },
+        }),
+      });
 
-    if (!readmeResponse.ok) throw new Error("❌ Failed to generate README");
+      if (!readmeResponse.ok) throw new Error("❌ Failed to generate README");
 
-    const data = await readmeResponse.json();
+      const data = await readmeResponse.json();
 
-    // Handle any API errors in the response
-    if (!data?.data?.generateReadme?.success) {
-      throw new Error(data?.data?.generateReadme?.error || "Unknown error");
-    }
+      if (!data?.data?.generateReadme?.success) {
+        throw new Error(data?.data?.generateReadme?.error || "Unknown error");
+      }
 
-    const content = data.data.generateReadme.content;
+      const content = data.data.generateReadme.content;
 
-    // Ensure content is not undefined or null before replacing
-    if (content) {
-      const cleanedReply = content
-        .replace(/```markdown/g, "")
-        .replace(/```/g, "");
-      setReadme(cleanedReply);
-    } else {
-      throw new Error("❌ No content returned from the API");
-    }
+      if (content) {
+        const cleanedReply = content
+          .replace(/```markdown/g, "")
+          .replace(/```/g, "");
+        setReadme(cleanedReply);
+      } else {
+        throw new Error("❌ No content returned from the API");
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "⚠️ An error occurred.");
     } finally {
@@ -71,7 +68,6 @@ export default function Home() {
       .then(() => alert("✅ README content copied!"))
       .catch((err) => alert("❌ Failed to copy: " + err));
   };
-
 
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-black via-purple-900 to-gray-900 p-4 sm:p-6">
@@ -99,7 +95,7 @@ export default function Home() {
           <button
             type="submit"
             disabled={loading}
-            className="w-full px-5 sm:px-6 py-3 text-lg font-semibold bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-lg shadow-[0_4px_0px_#5a1ea1,0_6px_10px_rgba(0,0,0,0.5)] transition-all transform hover:translate-y-1 hover:shadow-[0_2px_0px_#5a1ea1,0_3px_8px_rgba(0,0,0,0.5)] active:shadow-[0_0px_0px_#5a1ea1,0_0px_5px_rgba(0,0,0,0.4)] active:translate-y-2 sm:text-base"
+            className="w-full px-4 py-2 text-base font-semibold bg-gradient-to-r from-purple-600 to-purple-800 text-white rounded-lg shadow-[0_4px_0px_#5a1ea1,0_6px_10px_rgba(0,0,0,0.5)] transition-all transform hover:translate-y-1 hover:shadow-[0_2px_0px_#5a1ea1,0_3px_8px_rgba(0,0,0,0.5)] active:shadow-[0_0px_0px_#5a1ea1,0_0px_5px_rgba(0,0,0,0.4)] active:translate-y-2 sm:px-6 sm:py-3 sm:text-lg"
           >
             {loading ? "⚡ Processing..." : "✨ Generate README"}
           </button>
