@@ -1,9 +1,8 @@
-// app/api/graphql/route.ts
 import { NextRequest } from "next/server";
 import { ApolloServer } from "@apollo/server";
 import { startServerAndCreateNextHandler } from "@as-integrations/next";
 import { gql } from "graphql-tag";
-import { generateReadmeFromRepo } from "@/utils/readmeGenerator"; // We'll move your core logic here
+import { generateReadmeFromRepo } from "@/utils/readmeGenerator";
 
 const typeDefs = gql`
   type Query {
@@ -40,5 +39,12 @@ const server = new ApolloServer({
   resolvers,
 });
 
-const handler = startServerAndCreateNextHandler<NextRequest>(server);
+// Explicitly define the handler function to match the expected signature
+const handler = startServerAndCreateNextHandler<NextRequest>(server, {
+  context: async () => {
+    // You can add custom context logic here if needed
+    return {};
+  },
+});
+
 export { handler as GET, handler as POST };
