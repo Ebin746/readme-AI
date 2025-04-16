@@ -1,9 +1,11 @@
-import { NextRequest } from "next/server";
+// app/api/graphql/route.ts
+
 import { ApolloServer } from "@apollo/server";
 import { startServerAndCreateNextHandler } from "@as-integrations/next";
 import { gql } from "graphql-tag";
-import { generateReadmeFromRepo } from "@/utils/readmeGenerator";
+import { generateReadmeFromRepo } from "@/utils/readmeGenerator"; // Your function for generating README
 
+// Define GraphQL Schema
 const typeDefs = gql`
   type Query {
     _empty: String
@@ -20,6 +22,7 @@ const typeDefs = gql`
   }
 `;
 
+// Define Resolvers
 const resolvers = {
   Mutation: {
     async generateReadme(_: unknown, { repoUrl }: { repoUrl: string }) {
@@ -27,24 +30,22 @@ const resolvers = {
         const content = await generateReadmeFromRepo(repoUrl);
         return { success: true, content, error: null };
       } catch (err: unknown) {
-        const errorMessage = err instanceof Error ? err.message : "An unknown error occurred";
+        const errorMessage =
+          err instanceof Error ? err.message : "An unknown error occurred";
         return { success: false, content: null, error: errorMessage };
       }
     },
   },
 };
 
+// Create Apollo Server Instance
 const server = new ApolloServer({
   typeDefs,
   resolvers,
 });
 
-// Explicitly define the handler function to match the expected signature
-const handler = startServerAndCreateNextHandler<NextRequest>(server, {
-  context: async () => {
-    // You can add custom context logic here if needed
-    return {};
-  },
-});
+// Create Next.js Handler for GraphQL
+const handler = startServerAndCreateNextHandler(server);
 
+// Export the handler directly without manually passing context
 export { handler as GET, handler as POST };
