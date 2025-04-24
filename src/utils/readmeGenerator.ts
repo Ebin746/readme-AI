@@ -12,59 +12,134 @@ interface GitHubFile {
   download_url?: string; // Only present for files
 }
 
-async function fetchGitHubFiles(owner: string, repo: string, path = ""): Promise<GitHubFile[]> {
-  const url = `${GITHUB_API_BASE}/${owner}/${repo}/contents/${path}`;
-  const response = await fetch(url, {
+// Improved function to fetch repo contents using tree API
+async function fetchRepoContents(
+  owner: string, 
+  repo: string, 
+  signal: AbortSignal,
+  updateProgress?: (progress: number) => Promise<void>
+): Promise<GitHubFile[]> {
+  // Get the default branch first
+  const repoResponse = await fetch(`${GITHUB_API_BASE}/${owner}/${repo}`, {
     headers: {
       "User-Agent": "Next.js App",
       Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
     },
+    signal,
+    cache: "force-cache",
   });
+  
+  const repoData = await repoResponse.json();
+  const defaultBranch = repoData.default_branch;
+  
+  if (updateProgress) await updateProgress(0.1); // 10% progress
+  
+  // Use the tree API with recursive flag for better performance
+  const treeUrl = `${GITHUB_API_BASE}/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`;
+  const response = await fetch(treeUrl, {
+    headers: {
+      "User-Agent": "Next.js App",
+      Authorization: `Bearer ${process.env.GITHUB_TOKEN}`,
+    },
+    signal,
+    cache: "force-cache",
+  });
+  
   if (!response.ok) throw new Error(`GitHub API Error: ${response.statusText}`);
   const data = await response.json();
-  if (!Array.isArray(data)) throw new Error("Unexpected GitHub API response");
-
-  let files: GitHubFile[] = [];
-  for (const item of data) {
-    if (item.type === "dir") {
-      const subFiles = await fetchGitHubFiles(owner, repo, item.path);
-      files = files.concat(subFiles);
-    } else {
-      files.push(item as GitHubFile);
-    }
-  }
-  return files;
+  
+  if (updateProgress) await updateProgress(0.2); // 20% progress
+  
+  // Only return actual files, not directories, and filter out excluded files
+  return data.tree
+    .filter((item: { type: string; path: string; }) => 
+      item.type === "blob" && 
+      !excludeList.some(ex => item.path.includes(ex)) && 
+      !excludeExtensions.some(ext => item.path.endsWith(ext))
+    )
+    .map((item: { path: string; }) => ({
+      type: "file",
+      path: item.path,
+      name: item.path.split('/').pop() || "",
+      download_url: `https://raw.githubusercontent.com/${owner}/${repo}/${defaultBranch}/${item.path}`
+    }));
 }
 
-async function fetchFileContent(downloadUrl: string): Promise<string> {
-  const response = await fetch(downloadUrl);
-  if (!response.ok) throw new Error("Failed to fetch file content");
+async function fetchFileContent(downloadUrl: string, signal: AbortSignal): Promise<string> {
+  const response = await fetch(downloadUrl, { signal, cache: "force-cache" });
+  if (!response.ok) throw new Error(`Failed to fetch file content from ${downloadUrl}`);
   return response.text();
 }
 
-export async function generateReadmeFromRepo(repoUrl: string): Promise<string> {
+// Add progress callback parameter
+export async function generateReadmeFromRepo(
+  repoUrl: string, 
+  progressCallback?: (progress: number) => Promise<void>,
+  signal: AbortSignal = new AbortController().signal
+): Promise<string> {
   const match = repoUrl.match(/github\.com\/([^/]+)\/([^/]+)/);
   if (!match) throw new Error("Invalid repository URL format");
 
   const [, githubUser, repoName] = match;
+  
+  // Get all files using the optimized tree API
+  const filesList = await fetchRepoContents(githubUser, repoName, signal, progressCallback);
+  
+  if (progressCallback) await progressCallback(0.3); // 30% progress
+  
+  // Create file list for README
   let readmeContent = `# ${repoName}\n\n## File List\n\n`;
-  const codeFiles: Record<string, string> = {};
-
-  const filesList = await fetchGitHubFiles(githubUser, repoName);
-  for (const file of filesList) {
-    if (
-      file.type === "file" &&
-      !excludeList.some(ex => file.path.includes(ex)) &&
-      !excludeExtensions.some(ext => file.name.endsWith(ext))
-    ) {
-      const content = await fetchFileContent(file.download_url!); 
-      readmeContent += `- ${file.path}\n`;
-      codeFiles[file.path] = content;
+  filesList.forEach(file => {
+    readmeContent += `- ${file.path}\n`;
+  });
+  
+  if (progressCallback) await progressCallback(0.4); // 40% progress
+  
+  // Determine important files to analyze
+  // Focus on key files that reveal project structure
+  const keyFiles = ['package.json', '.eslintrc', 'tsconfig.json', 'README.md', 'next.config.js'];
+  const sourceFiles = ['.js', '.jsx', '.ts', '.tsx', '.md'];
+  
+  const priorityFiles = filesList.filter(file => 
+    keyFiles.includes(file.name) || keyFiles.some(key => file.path.includes(key))
+  );
+  
+  // Add some representative source files
+  const sourceCodeFiles = filesList
+    .filter(file => sourceFiles.some(ext => file.path.endsWith(ext)))
+    .filter(file => !file.path.includes('node_modules') && !file.path.includes('dist'))
+    .slice(0, 10); // Limit to 10 source files
+  
+  // Combine priority files with source files
+  const filesToFetch = [...priorityFiles, ...sourceCodeFiles].slice(0, 15);
+  
+  // Fetch file contents in parallel
+  const contentPromises = filesToFetch.map(async (file, index) => {
+    try {
+      const content = await fetchFileContent(file.download_url!, signal);
+      if (progressCallback) {
+        // Update progress from 40% to 70% during file fetching
+        await progressCallback(0.4 + (index / filesToFetch.length) * 0.3);
+      }
+      return { path: file.path, content };
+    } catch (error) {
+      console.error(`Error fetching ${file.path}:`, error);
+      return { path: file.path, content: "" };
     }
-  }
-
+  });
+  
+  const fileContents = await Promise.all(contentPromises);
+  const codeFiles: Record<string, string> = {};
+  fileContents.forEach(({ path, content }) => {
+    codeFiles[path] = content;
+  });
+  
+  if (progressCallback) await progressCallback(0.7); // 70% progress
+  
   readmeContent += `\n## File Contents\n\n`;
   const extractedContent = extractContent(JSON.stringify(codeFiles));
+  
+  if (progressCallback) await progressCallback(0.8);
 
   const prompt = `
        You are a senior technical writer creating professional documentation. Generate a polished and flexible README.md for a modern web project (e.g., Next.js, MERN stack, or similar). Follow these guidelines:

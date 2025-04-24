@@ -1,8 +1,7 @@
-// app/api/graphql/route.ts
 import { ApolloServer } from "@apollo/server";
 import { startServerAndCreateNextHandler } from "@as-integrations/next";
 import { gql } from "graphql-tag";
-import { startReadmeGeneration, getReadmeGenerationStatus } from "@/utils/jobManger";
+import { startReadmeGeneration, getReadmeGenerationStatus, cancelReadmeGeneration } from "@/utils/jobManger";
 import { NextRequest } from "next/server";
 
 // Define GraphQL Schema
@@ -10,17 +9,23 @@ const typeDefs = gql`
   type Query {
     readmeJob(jobId: String!): ReadmeJobStatus!
   }
-
+  
   type Mutation {
     startReadmeJob(repoUrl: String!): ReadmeJobResponse!
+    cancelReadmeJob(jobId: String!): CancelJobResponse!
   }
-
+  
   type ReadmeJobResponse {
     success: Boolean!
     jobId: String
     error: String
   }
-
+  
+  type CancelJobResponse {
+    success: Boolean!
+    error: String
+  }
+  
   type ReadmeJobStatus {
     jobId: String!
     status: JobStatus!
@@ -28,7 +33,7 @@ const typeDefs = gql`
     error: String
     progress: Float
   }
-
+  
   enum JobStatus {
     PENDING
     PROCESSING
@@ -50,11 +55,24 @@ const resolvers = {
         const jobId = await startReadmeGeneration(repoUrl);
         return { success: true, jobId, error: null };
       } catch (err: unknown) {
-        const errorMessage =
+        const errorMessage = 
           err instanceof Error ? err.message : "An unknown error occurred";
         return { success: false, jobId: null, error: errorMessage };
       }
     },
+    async cancelReadmeJob(_: unknown, { jobId }: { jobId: string }) {
+      try {
+        const success = await cancelReadmeGeneration(jobId);
+        return { 
+          success, 
+          error: success ? null : "Failed to cancel job or job not found" 
+        };
+      } catch (err: unknown) {
+        const errorMessage = 
+          err instanceof Error ? err.message : "An unknown error occurred";
+        return { success: false, error: errorMessage };
+      }
+    }
   },
 };
 
