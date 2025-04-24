@@ -1,5 +1,5 @@
 "use client";
-import { useState, useEffect } from "react";
+import { useState, } from "react";
 import Markdown from "react-markdown";
 
 export default function Home() {
@@ -7,7 +7,7 @@ export default function Home() {
   const [readme, setReadme] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
-  const [jobId, setJobId] = useState<string | null>(null);
+
   const [progress, setProgress] = useState(0);
 
   const handleGenerate = async (e: { preventDefault: () => void; }) => {
@@ -20,7 +20,7 @@ export default function Home() {
     setLoading(true);
     setError("");
     setReadme("");
-    setJobId(null);
+
     setProgress(0);
 
     try {
@@ -51,7 +51,6 @@ export default function Home() {
       }
 
       const newJobId = startJobData.data.startReadmeJob.jobId;
-      setJobId(newJobId);
       
       // Start polling for job status
       pollJobStatus(newJobId);
