@@ -1,5 +1,5 @@
 "use client";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import Markdown from "react-markdown";
 
 export default function Home() {
@@ -7,6 +7,8 @@ export default function Home() {
   const [readme, setReadme] = useState("");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [jobId, setJobId] = useState<string | null>(null);
+  const [progress, setProgress] = useState(0);
 
   const handleGenerate = async (e: { preventDefault: () => void; }) => {
     e.preventDefault();
@@ -18,17 +20,20 @@ export default function Home() {
     setLoading(true);
     setError("");
     setReadme("");
+    setJobId(null);
+    setProgress(0);
 
     try {
-      const readmeResponse = await fetch("/api/graphql", {
+      // Step 1: Start the README generation job
+      const startJobResponse = await fetch("/api/graphql", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: `
-            mutation GenerateReadme($repoUrl: String!) {
-              generateReadme(repoUrl: $repoUrl) {
+            mutation StartReadmeJob($repoUrl: String!) {
+              startReadmeJob(repoUrl: $repoUrl) {
                 success
-                content
+                jobId
                 error
               }
             }
@@ -37,27 +42,74 @@ export default function Home() {
         }),
       });
 
-      if (!readmeResponse.ok) throw new Error("❌ Failed to generate README");
+      if (!startJobResponse.ok) throw new Error("❌ Failed to start README generation");
 
-      const data = await readmeResponse.json();
+      const startJobData = await startJobResponse.json();
 
-      if (!data?.data?.generateReadme?.success) {
-        throw new Error(data?.data?.generateReadme?.error || "Unknown error");
+      if (!startJobData?.data?.startReadmeJob?.success) {
+        throw new Error(startJobData?.data?.startReadmeJob?.error || "Unknown error");
       }
 
-      const content = data.data.generateReadme.content;
+      const newJobId = startJobData.data.startReadmeJob.jobId;
+      setJobId(newJobId);
+      
+      // Start polling for job status
+      pollJobStatus(newJobId);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "⚠️ An error occurred.");
+      setLoading(false);
+    }
+  };
 
-      if (content) {
-        const cleanedReply = content
+  const pollJobStatus = async (jobId: string) => {
+    try {
+      const statusResponse = await fetch("/api/graphql", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          query: `
+            query GetReadmeJobStatus($jobId: String!) {
+              readmeJob(jobId: $jobId) {
+                jobId
+                status
+                content
+                error
+                progress
+              }
+            }
+          `,
+          variables: { jobId },
+        }),
+      });
+
+      if (!statusResponse.ok) throw new Error("❌ Failed to check job status");
+
+      const statusData = await statusResponse.json();
+      const job = statusData.data.readmeJob;
+
+      setProgress(job.progress);
+
+      if (job.status === "FAILED") {
+        setError(job.error || "⚠️ Job failed.");
+        setLoading(false);
+        return;
+      }
+      
+      if (job.status === "COMPLETED" && job.content) {
+        const cleanedReply = job.content
           .replace(/```markdown/g, "")
           .replace(/```/g, "");
         setReadme(cleanedReply);
-      } else {
-        throw new Error("❌ No content returned from the API");
+        setLoading(false);
+        return;
+      }
+      
+      // Continue polling if job is still in progress
+      if (job.status === "PENDING" || job.status === "PROCESSING") {
+        setTimeout(() => pollJobStatus(jobId), 2000); // Poll every 2 seconds
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : "⚠️ An error occurred.");
-    } finally {
       setLoading(false);
     }
   };
@@ -128,11 +180,21 @@ export default function Home() {
           </div>
         )}
 
-        {/* Loading Indicator */}
-        {loading && !readme && (
+        {/* Loading Indicator with Progress */}
+        {loading && (
           <div className="text-center p-8">
-            <div className="animate-spin rounded-full h-10 sm:h-12 w-10 sm:w-12 border-b-4 border-purple-400 mx-auto"></div>
-            <p className="mt-4 text-gray-300 text-sm sm:text-base">Generating README...</p>
+            <div className="relative h-4 bg-gray-700 rounded-full w-full max-w-xs mx-auto overflow-hidden">
+              <div 
+                className="absolute left-0 top-0 h-full bg-purple-500 transition-all duration-300"
+                style={{ width: `${progress}%` }}
+              ></div>
+            </div>
+            <p className="mt-4 text-gray-300 text-sm sm:text-base">
+              {progress < 10 ? "Starting job..." : 
+               progress < 30 ? "Fetching repository information..." :
+               progress < 70 ? "Analyzing code and generating README..." :
+               progress < 100 ? "Finalizing content..." : "Completed!"}
+            </p>
           </div>
         )}
       </div>

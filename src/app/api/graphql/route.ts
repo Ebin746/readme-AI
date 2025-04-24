@@ -1,37 +1,58 @@
+// app/api/graphql/route.ts
 import { ApolloServer } from "@apollo/server";
 import { startServerAndCreateNextHandler } from "@as-integrations/next";
 import { gql } from "graphql-tag";
-import { generateReadmeFromRepo } from "@/utils/readmeGenerator";
+import { startReadmeGeneration, getReadmeGenerationStatus } from "@/utils/jobManger";
 import { NextRequest } from "next/server";
 
 // Define GraphQL Schema
 const typeDefs = gql`
   type Query {
-    _empty: String
+    readmeJob(jobId: String!): ReadmeJobStatus!
   }
 
   type Mutation {
-    generateReadme(repoUrl: String!): ReadmeResponse
+    startReadmeJob(repoUrl: String!): ReadmeJobResponse!
   }
 
-  type ReadmeResponse {
+  type ReadmeJobResponse {
     success: Boolean!
+    jobId: String
+    error: String
+  }
+
+  type ReadmeJobStatus {
+    jobId: String!
+    status: JobStatus!
     content: String
     error: String
+    progress: Float
+  }
+
+  enum JobStatus {
+    PENDING
+    PROCESSING
+    COMPLETED
+    FAILED
   }
 `;
 
 // Define Resolvers
 const resolvers = {
+  Query: {
+    async readmeJob(_: unknown, { jobId }: { jobId: string }) {
+      return await getReadmeGenerationStatus(jobId);
+    }
+  },
   Mutation: {
-    async generateReadme(_: unknown, { repoUrl }: { repoUrl: string }) {
+    async startReadmeJob(_: unknown, { repoUrl }: { repoUrl: string }) {
       try {
-        const content = await generateReadmeFromRepo(repoUrl);
-        return { success: true, content, error: null };
+        const jobId = await startReadmeGeneration(repoUrl);
+        return { success: true, jobId, error: null };
       } catch (err: unknown) {
         const errorMessage =
           err instanceof Error ? err.message : "An unknown error occurred";
-        return { success: false, content: null, error: errorMessage };
+        return { success: false, jobId: null, error: errorMessage };
       }
     },
   },
@@ -43,14 +64,13 @@ const server = new ApolloServer({
   resolvers,
 });
 
-// Create the Next.js handler
-const apolloHandler = startServerAndCreateNextHandler(server);
+// Export a Next.js API Handler
+const handler = startServerAndCreateNextHandler(server);
 
-// Define the GET and POST handlers with correct parameters
 export async function GET(request: NextRequest) {
-  return apolloHandler(request);
+  return handler(request);
 }
 
 export async function POST(request: NextRequest) {
-  return apolloHandler(request);
+  return handler(request);
 }

@@ -57,7 +57,7 @@ export async function generateReadmeFromRepo(repoUrl: string): Promise<string> {
       !excludeList.some(ex => file.path.includes(ex)) &&
       !excludeExtensions.some(ext => file.name.endsWith(ext))
     ) {
-      const content = await fetchFileContent(file.download_url!); // `download_url` is guaranteed for files
+      const content = await fetchFileContent(file.download_url!); 
       readmeContent += `- ${file.path}\n`;
       codeFiles[file.path] = content;
     }
