@@ -1,60 +1,42 @@
 // utils/jobManager.ts
+import { createClient } from '@supabase/supabase-js';
 import { generateReadmeFromRepo } from "./readmeGenerator";
 import { v4 as uuidv4 } from "uuid";
 
-// In-memory job storage (replace with database in production)
-type JobStatus = "PENDING" | "PROCESSING" | "COMPLETED" | "FAILED";
-
-interface Job {
-  id: string;
-  repoUrl: string;
-  status: JobStatus;
-  content?: string;
-  error?: string;
-  progress: number;
-  createdAt: Date;
-  updatedAt: Date;
-}
-
-// Simple in-memory store (replace with a real database for production)
-const jobs = new Map<string, Job>();
-
-// Clean up old jobs periodically
-setInterval(() => {
-  const now = new Date();
-  for (const [id, job] of jobs.entries()) {
-    // Remove jobs older than 1 hour
-    if (now.getTime() - job.createdAt.getTime() > 3600000) {
-      jobs.delete(id);
-    }
-  }
-}, 300000); // Run every 5 minutes
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+const supabaseKey = process.env.SUPABASE_SERVICE_KEY as string;
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function startReadmeGeneration(repoUrl: string): Promise<string> {
   const jobId = uuidv4();
   
-  // Create a new job
-  const job: Job = {
-    id: jobId,
-    repoUrl,
-    status: "PENDING",
-    progress: 0,
-    createdAt: new Date(),
-    updatedAt: new Date()
-  };
+  // Create a new job in the database
+  await supabase
+    .from('readme_jobs')
+    .insert([
+      { 
+        id: jobId,
+        repo_url: repoUrl,
+        status: 'PENDING',
+        progress: 0,
+        created_at: new Date().toISOString()
+      }
+    ]);
   
-  jobs.set(jobId, job);
-  
-  // Start processing in the background
-  processJob(job);
+  // Start the job processing (without waiting for completion)
+  processJob(jobId, repoUrl).catch(console.error);
   
   return jobId;
 }
 
 export async function getReadmeGenerationStatus(jobId: string) {
-  const job = jobs.get(jobId);
+  const { data: job, error } = await supabase
+    .from('readme_jobs')
+    .select('*')
+    .eq('id', jobId)
+    .single();
   
-  if (!job) {
+  if (error || !job) {
     return {
       jobId,
       status: "FAILED",
@@ -72,30 +54,40 @@ export async function getReadmeGenerationStatus(jobId: string) {
   };
 }
 
-async function processJob(job: Job) {
+async function processJob(jobId: string, repoUrl: string) {
   try {
     // Update job status
-    job.status = "PROCESSING";
-    job.progress = 10;
-    job.updatedAt = new Date();
+    await supabase
+      .from('readme_jobs')
+      .update({ 
+        status: 'PROCESSING',
+        progress: 10,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', jobId);
     
-    // Fetch repo content and generate README
-    job.progress = 30;
-    jobs.set(job.id, job);
-    
-    const readme = await generateReadmeFromRepo(job.repoUrl);
+    // Generate README
+    const readme = await generateReadmeFromRepo(repoUrl);
     
     // Update job with results
-    job.status = "COMPLETED";
-    job.content = readme;
-    job.progress = 100;
-    job.updatedAt = new Date();
-    jobs.set(job.id, job);
+    await supabase
+      .from('readme_jobs')
+      .update({ 
+        status: 'COMPLETED',
+        content: readme,
+        progress: 100,
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', jobId);
   } catch (error) {
     // Handle errors
-    job.status = "FAILED";
-    job.error = error instanceof Error ? error.message : "Unknown error occurred";
-    job.updatedAt = new Date();
-    jobs.set(job.id, job);
+    await supabase
+      .from('readme_jobs')
+      .update({ 
+        status: 'FAILED',
+        error: error instanceof Error ? error.message : "Unknown error occurred",
+        updated_at: new Date().toISOString()
+      })
+      .eq('id', jobId);
   }
 }
