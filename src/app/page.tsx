@@ -1,8 +1,11 @@
 "use client";
 import { useState, useEffect } from "react";
 import Markdown from "react-markdown";
+import { ApiUsageDisplay } from "./components/ApiUsageDisplay";
+import { UserButton, SignInButton, useUser } from "@clerk/nextjs";
 
 export default function Home() {
+  const { isLoaded, isSignedIn } = useUser();
   const [repoUrl, setRepoUrl] = useState("");
   const [readme, setReadme] = useState("");
   const [loading, setLoading] = useState(false);
@@ -182,13 +185,33 @@ export default function Home() {
   return (
     <div className="min-h-screen flex items-center justify-center bg-gradient-to-b from-black via-purple-900 to-gray-900 p-4 sm:p-6">
       <div className="w-full max-w-3xl bg-white/10 backdrop-blur-md shadow-2xl rounded-2xl p-6 sm:p-8 border border-purple-400/50">
-        {/* Header */}
-        <h1 className="text-3xl sm:text-4xl font-extrabold text-white text-center animate-fade-in">
-          🚀 GitHub <span className="text-purple-400">README Generator</span>
-        </h1>
+        {/* Header with Auth UI */}
+        <div className="flex justify-between items-center mb-4">
+          <h1 className="text-3xl sm:text-4xl font-extrabold text-white animate-fade-in">
+            🚀 <span className="text-purple-400">README Generator</span>
+          </h1>
+          
+          {isLoaded && (
+            <div className="flex items-center space-x-2">
+              {isSignedIn ? (
+                <UserButton afterSignOutUrl="/" />
+              ) : (
+                <SignInButton mode="modal">
+                  <button className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 transition-colors">
+                    Sign In
+                  </button>
+                </SignInButton>
+              )}
+            </div>
+          )}
+        </div>
+        
         <p className="text-gray-300 text-center mt-2 text-sm sm:text-base">
           Create professional README files instantly.
         </p>
+        
+        {/* API Usage Display */}
+        <ApiUsageDisplay />
 
         {/* Form Section */}
         <form onSubmit={handleGenerate} className="mt-6 space-y-4">
@@ -265,4 +288,6 @@ export default function Home() {
           </div>
         )}
       </div>
-    </div>)}
+    </div>
+  );
+}
