@@ -97,7 +97,7 @@ export async function generateReadmeFromRepo(
   
   // Determine important files to analyze
   // Focus on key files that reveal project structure
-  const keyFiles = ['package.json', '.eslintrc', 'tsconfig.json', 'README.md', 'next.config.js'];
+  const keyFiles = ['package.json', '.eslintrc', 'tsconfig.json'];
   const sourceFiles = ['.js', '.jsx', '.ts', '.tsx', '.md'];
   
   const priorityFiles = filesList.filter(file => 
