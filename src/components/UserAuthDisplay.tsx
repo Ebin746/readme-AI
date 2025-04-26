@@ -26,7 +26,7 @@ export function UserAuthDisplay() {
         </div>
       ) : (
         <SignInButton mode="modal">
-          <button className="px-3 py-1.5 bg-purple-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors shadow-md">
+          <button className="px-3 py-1.5 bg-gradient-to-r from-purple-600 to-pink-600 text-white text-sm rounded-lg hover:bg-purple-700 transition-colors shadow-md">
             Sign In
           </button>
         </SignInButton>
