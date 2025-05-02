@@ -72,7 +72,10 @@ export function useReadmeGeneration(repoUrl: string) {
         }
       });
 
-    // Polling fallback
+    // Polling fallback with failure tracking
+    let pollFailureCount = 0;
+    const MAX_POLL_FAILURES = 5;
+
     const interval = setInterval(async () => {
       try {
         const response = await fetch("/api/graphql", {
@@ -93,7 +96,15 @@ export function useReadmeGeneration(repoUrl: string) {
           }),
         });
 
+        if (!response.ok) {
+          throw new Error(`HTTP error: ${response.statusText}`);
+        }
+
         const data = await response.json();
+        if (data.errors) {
+          throw new Error(data.errors[0]?.message || "GraphQL error");
+        }
+
         const job = data.data.readmeJob;
 
         setProgress(job.progress || 0);
@@ -113,13 +124,23 @@ export function useReadmeGeneration(repoUrl: string) {
           setJobId(null);
           clearInterval(interval);
         }
+
+        // Reset failure count on successful poll
+        pollFailureCount = 0;
       } catch (err) {
         console.error("Polling error:", err);
-        setError("⚠️ Failed to fetch job status. Please try again.");
-        setLoading(false);
-        clearInterval(interval);
+        pollFailureCount++;
+
+        if (pollFailureCount >= MAX_POLL_FAILURES) {
+          console.warn(`Stopping polling for job ${jobId} after ${MAX_POLL_FAILURES} consecutive failures`);
+          setError("⚠️ Failed to fetch job status after multiple attempts. Relying on real-time updates.");
+          setLoading(false);
+          clearInterval(interval);
+        } else {
+          setError("⚠️ Temporary failure fetching job status. Retrying...");
+        }
       }
-    }, 5000); // Poll every 5 seconds
+    }, 10000); // Poll every 10 seconds
 
     return () => {
       console.log(`Unsubscribing from channel ${channelName}`);
