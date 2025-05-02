@@ -1,5 +1,14 @@
 "use client";
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useCallback } from "react";
+import { createClient } from '@supabase/supabase-js';
+import { Database } from "@/types/supabase";
+
+const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL as string;
+const supabaseKey = process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY as string;
+
+if (!supabaseUrl || !supabaseKey) {
+  console.error("Supabase URL or Anon Key is missing in environment variables");
+}
 
 export function useReadmeGeneration(repoUrl: string) {
   const [readme, setReadme] = useState("");
@@ -7,97 +16,117 @@ export function useReadmeGeneration(repoUrl: string) {
   const [error, setError] = useState("");
   const [progress, setProgress] = useState(0);
   const [jobId, setJobId] = useState<string | null>(null);
-  const intervalRef = useRef<NodeJS.Timeout | null>(null);
 
-  // Cleanup function to clear interval
-  const clearStatusInterval = useCallback(() => {
-    if (intervalRef.current) {
-      clearInterval(intervalRef.current);
-      intervalRef.current = null;
-    }
+  const getSupabase = useCallback(() => {
+    return createClient<Database>(supabaseUrl, supabaseKey, {
+      realtime: {
+        params: {
+          eventsPerSecond: 10,
+        },
+      },
+    });
   }, []);
 
-  // Function to check job status
-  const checkJobStatus = useCallback(
-    async (currentJobId: string) => {
-      if (!currentJobId) return;
+  useEffect(() => {
+    if (!jobId) return;
 
+    const supabase = getSupabase();
+    const channelName = `job-${jobId}`;
+
+    const subscription = supabase
+      .channel(channelName)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'readme_jobs',
+          filter: `id=eq.${jobId}`,
+        },
+        (payload) => {
+          console.log('Supabase update received:', payload);
+          const job = payload.new;
+
+          setProgress(job.progress || 0);
+
+          if (job.status === 'COMPLETED' && job.content) {
+            const cleanedReply = job.content
+              .replace(/```markdown/g, "")
+              .replace(/```/g, "");
+            setReadme(cleanedReply);
+            setLoading(false);
+            setJobId(null);
+          } else if (job.status === 'FAILED') {
+            setError(job.error || "⚠️ Job failed. Please check your GitHub token, Supabase configuration, or repository access.");
+            setLoading(false);
+            setJobId(null);
+          }
+        }
+      )
+      .subscribe((status, err) => {
+        console.log('Subscription status:', status);
+        if (status === 'SUBSCRIBED') {
+          console.log(`Subscribed to channel ${channelName}`);
+        } else if (status === 'CLOSED' || status === 'CHANNEL_ERROR') {
+          console.error('Subscription failed with error:', err);
+        }
+      });
+
+    // Polling fallback
+    const interval = setInterval(async () => {
       try {
-        const statusResponse = await fetch("/api/graphql", {
+        const response = await fetch("/api/graphql", {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             query: `
-              query GetReadmeJobStatus($jobId: String!) {
+              query ReadmeJob($jobId: String!) {
                 readmeJob(jobId: $jobId) {
-                  jobId
                   status
+                  progress
                   content
                   error
-                  progress
                 }
               }
             `,
-            variables: { jobId: currentJobId },
+            variables: { jobId },
           }),
         });
 
-        if (!statusResponse.ok) {
-          console.error("Status response not OK", statusResponse.status);
-          return;
-        }
-
-        const statusData = await statusResponse.json();
-        const job = statusData?.data?.readmeJob;
-
-        if (!job) {
-          console.error("Invalid response format:", statusData);
-          return;
-        }
+        const data = await response.json();
+        const job = data.data.readmeJob;
 
         setProgress(job.progress || 0);
 
-        if (job.status === "FAILED") {
-          setError(job.error || "⚠️ Job failed.");
-          setLoading(false);
-          setJobId(null);
-          clearStatusInterval();
-          return;
-        }
-
-        if (job.status === "COMPLETED" && job.content) {
+        if (job.status === 'COMPLETED' && job.content) {
           const cleanedReply = job.content
             .replace(/```markdown/g, "")
             .replace(/```/g, "");
           setReadme(cleanedReply);
           setLoading(false);
           setJobId(null);
-          clearStatusInterval();
+          setError("");
+          clearInterval(interval);
+        } else if (job.status === 'FAILED') {
+          setError(job.error || "⚠️ Job failed.");
+          setLoading(false);
+          setJobId(null);
+          clearInterval(interval);
         }
       } catch (err) {
-        console.error("Error checking job status:", err);
+        console.error("Polling error:", err);
+        setError("⚠️ Failed to fetch job status. Please try again.");
+        setLoading(false);
+        clearInterval(interval);
       }
-    },
-    [clearStatusInterval]
-  );
+    }, 5000); // Poll every 5 seconds
 
-  // Set up polling when job starts and clean up when done
-  useEffect(() => {
-    clearStatusInterval();
-
-    if (loading && jobId) {
-      checkJobStatus(jobId);
-
-      intervalRef.current = setInterval(() => {
-        checkJobStatus(jobId);
-      }, 1000);
-    }
-
-    return clearStatusInterval;
-  }, [loading, jobId, clearStatusInterval, checkJobStatus]);
-
-  // Keep track of when the job started
-  const startTimeRef = useRef(Date.now());
+    return () => {
+      console.log(`Unsubscribing from channel ${channelName}`);
+      supabase.removeChannel(subscription);
+      clearInterval(interval);
+    };
+  }, [jobId, getSupabase]);
 
   const handleGenerate = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -106,7 +135,6 @@ export function useReadmeGeneration(repoUrl: string) {
       return;
     }
 
-    // Validate URL format
     if (!repoUrl.match(/github\.com\/[^/]+\/[^/]+/)) {
       setError("⚠️ Invalid GitHub repository URL format. Use https://github.com/username/repo");
       return;
@@ -117,7 +145,6 @@ export function useReadmeGeneration(repoUrl: string) {
     setReadme("");
     setProgress(0);
     setJobId(null);
-    startTimeRef.current = Date.now(); // Reset start time
 
     try {
       const startJobResponse = await fetch("/api/graphql", {
@@ -137,9 +164,15 @@ export function useReadmeGeneration(repoUrl: string) {
         }),
       });
 
-      if (!startJobResponse.ok) throw new Error("❌ Failed to start README generation");
+      if (!startJobResponse.ok) {
+        throw new Error(`❌ Failed to start README generation: ${startJobResponse.statusText}`);
+      }
 
       const startJobData = await startJobResponse.json();
+
+      if (startJobData.errors) {
+        throw new Error(startJobData.errors[0]?.message || "GraphQL error");
+      }
 
       if (!startJobData?.data?.startReadmeJob?.success) {
         throw new Error(startJobData?.data?.startReadmeJob?.error || "Unknown error");
@@ -174,17 +207,21 @@ export function useReadmeGeneration(repoUrl: string) {
         }),
       });
 
-      if (!cancelResponse.ok) throw new Error("❌ Failed to cancel job");
+      if (!cancelResponse.ok) {
+        throw new Error(`❌ Failed to cancel job: ${cancelResponse.statusText}`);
+      }
 
       const cancelData = await cancelResponse.json();
       if (cancelData?.data?.cancelReadmeJob?.success) {
         setError("Job cancelled");
         setLoading(false);
         setJobId(null);
-        clearStatusInterval();
+      } else {
+        throw new Error(cancelData?.data?.cancelReadmeJob?.error || "Failed to cancel job");
       }
     } catch (err) {
       console.error("Error cancelling job:", err);
+      setError(err instanceof Error ? err.message : "⚠️ Failed to cancel job.");
     }
   };
 

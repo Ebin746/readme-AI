@@ -53,6 +53,11 @@ const typeDefs = gql`
   }
 `;
 
+interface Context {
+  userId: string | null;
+  clientIp: string;
+}
+
 // Define Resolvers
 const resolvers = {
   Query: {
@@ -70,7 +75,7 @@ const resolvers = {
       }
     },
     
-    async userApiUsage(_: unknown, __: unknown, context: { userId: string | null; clientIp: string }) {
+    async userApiUsage(_: unknown, __: unknown, context: Context) {
       try {
         return await getUserApiUsage(context.userId, context.clientIp);
       } catch (error) {
@@ -92,17 +97,17 @@ const resolvers = {
   },
   
   Mutation: {
-    async startReadmeJob(_: unknown, { repoUrl }: { repoUrl: string }, context: { userId: string | null; clientIp: string }) {
+    async startReadmeJob(_: unknown, { repoUrl }: { repoUrl: string }, context: Context) {
       try {
         // Check rate limit first
         try {
-          const ratelimit = await checkRateLimit(context.userId, context.clientIp);
+          const rateLimit = await checkRateLimit(context.userId, context.clientIp);
           
-          if (!ratelimit.success) {
+          if (!rateLimit.success) {
             return {
               success: false,
               jobId: null,
-              error: `Rate limit exceeded. Try again after ${new Date(Date.now() + ratelimit.reset).toLocaleString()}.`
+              error: `Rate limit exceeded. Try again after ${new Date(Date.now() + rateLimit.reset).toLocaleString()}.`
             };
           }
         } catch (rateError) {
@@ -136,12 +141,11 @@ const resolvers = {
 };
 
 // Create Apollo Server Instance
-const server = new ApolloServer({
+const server = new ApolloServer<Context>({
   typeDefs,
   resolvers,
 });
 
-// Export a Next.js API Handler with context
 // Export a Next.js API Handler with context
 const handler = startServerAndCreateNextHandler(server, {
   context: async (req) => {
@@ -191,5 +195,15 @@ export async function GET(request: NextRequest) {
 }
 
 export async function POST(request: NextRequest) {
+  try {
     return await handler(request);
+  } catch (error) {
+    console.error("GraphQL POST error:", error);
+    return new Response(JSON.stringify({
+      errors: [{ message: "Internal server error" }]
+    }), {
+      status: 500,
+      headers: { "Content-Type": "application/json" }
+    });
+  }
 }

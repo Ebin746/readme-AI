@@ -3,13 +3,13 @@ import { UserButton, SignInButton, useUser } from "@clerk/nextjs";
 
 export function UserAuthDisplay() {
   const { isLoaded, isSignedIn } = useUser();
-
+  
   if (!isLoaded) {
     return (
       <div className="h-8 w-8 rounded-full bg-gray-700 animate-pulse"></div>
     );
   }
-
+  
   return (
     <div className="flex items-center">
       {isSignedIn ? (
