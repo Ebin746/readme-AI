@@ -249,7 +249,6 @@ export function useReadmeGeneration(repoUrl: string) {
   const handleCopy = () => {
     navigator.clipboard
       .writeText(readme)
-      .then(() => alert("✅ README content copied!"))
       .catch((err) => alert("❌ Failed to copy: " + err));
   };
 
