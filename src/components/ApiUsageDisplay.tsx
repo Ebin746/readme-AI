@@ -159,10 +159,8 @@ export function ApiUsageDisplay() {
           </span>
         ) : (
           <span className="flex items-center gap-1">
-            <strong>{remaining}</strong> of <strong>{limit}</strong> daily README generations remaining
-            <span className="hidden sm:inline px-1.5 py-0.5 ml-1 text-xs bg-purple-600/50 rounded-md border border-purple-500/50">
-              Sign In for More
-            </span>
+            <strong>{remaining}</strong> of <strong>{limit}</strong> daily README generations remaining sign In for More
+          
           </span>
         )}
       </div>

@@ -82,7 +82,17 @@ const excludeList = [
 
     // **General Java exclusions**
     "*.class", "*.jar", "*.war", "*.ear",
-    "target/", ".mvn/", "pom.xml", "settings.xml"
+    "target/", ".mvn/", "pom.xml", "settings.xml",
+
+    // **Machine Learning / Colab / Jupyter exclusions**
+"*.ipynb", "*.pt", "*.pth", "*.h5", "*.hdf5", "*.ckpt", "*.pb",
+"model.pkl", "model.joblib", "*.onnx", "*.tflite", "*.npz", "*.npy",
+".dvc/", "*.csv", "*.tsv", "*.parquet", "*.feather", "*.arff",
+"wandb/", "mlruns/", "tensorboard/", "events.out.tfevents.*",
+".cache/", "__pycache__/", ".pytest_cache/",
+"sample_data/", "datasets/", "data/", "data_raw/", "outputs/", "results/", "logs/",
+
+
 ];
 
 const excludeExtensions = [
@@ -107,6 +117,12 @@ const excludeExtensions = [
     ".sqlite3", ".db", ".db-journal",  // Database files
     ".obj", ".ilk", ".pdb", ".exp", ".lib", // C++ debugging and linking
     ".dex", ".apk", ".aab", // Android binary and package files
-    ".ipa" // iOS application package
+    ".ipa", // iOS application package
+
+// **ML / Data Science extensions**
+".ipynb", ".pt", ".pth", ".h5", ".hdf5", ".ckpt", ".pb",
+".joblib", ".pkl", ".onnx", ".tflite", ".npz", ".npy",
+".csv", ".tsv", ".parquet", ".feather", ".arff"
+
 ];
 export {excludeExtensions,excludeList}
