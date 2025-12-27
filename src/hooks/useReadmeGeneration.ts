@@ -111,8 +111,7 @@ export function useReadmeGeneration(repoUrl: string) {
 
         if (job.status === 'COMPLETED' && job.content) {
           const cleanedReply = job.content
-            .replace(/```markdown/g, "")
-            .replace(/```/g, "");
+        
           setReadme(cleanedReply);
           setLoading(false);
           setJobId(null);
