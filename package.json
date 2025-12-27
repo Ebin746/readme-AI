@@ -20,7 +20,7 @@
     "graphql": "^16.10.0",
     "graphql-tag": "^2.12.6",
     "natural": "^8.0.1",
-"next": "^15.2.3",
+    "next": "15.2.8",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "react-markdown": "^10.1.0"
