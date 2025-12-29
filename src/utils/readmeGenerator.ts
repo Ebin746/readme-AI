@@ -4,7 +4,7 @@ import { excludeList, excludeExtensions } from "@/utils/excludingList";
 
 const GITHUB_API_BASE = "https://api.github.com/repos";
 
-// Define the type for GitHub API file/directory response
+
 interface GitHubFile {
   type: "file" | "dir";
   path: string;
