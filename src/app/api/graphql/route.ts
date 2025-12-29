@@ -3,7 +3,7 @@ import { startServerAndCreateNextHandler } from "@as-integrations/next";
 import { gql } from "graphql-tag";
 import { startReadmeGeneration, getReadmeGenerationStatus, cancelReadmeGeneration } from "@/utils/jobManger";
 import { NextRequest } from "next/server";
-import { getAuth } from "@clerk/nextjs/server";
+import { NextApiRequest } from "next";
 import { checkRateLimit, getUserApiUsage } from "../../lib/ratelimit";
 
 // Define GraphQL Schema
@@ -42,7 +42,6 @@ const typeDefs = gql`
     remaining: Int!
     limit: Int!
     reset: String
-    isAuthenticated: Boolean!
   }
     
   enum JobStatus {
@@ -54,8 +53,25 @@ const typeDefs = gql`
 `;
 
 interface Context {
-  userId: string | null;
   clientIp: string;
+}
+
+// Helper function to get client IP
+function getClientIp(req: NextApiRequest): string {
+  // Try various headers in order of reliability
+  const cfConnectingIp = req.headers["cf-connecting-ip"];
+  const xRealIp = req.headers["x-real-ip"];
+  const xForwardedFor = req.headers["x-forwarded-for"];
+  
+  if (cfConnectingIp) return Array.isArray(cfConnectingIp) ? cfConnectingIp[0] : cfConnectingIp;
+  if (xRealIp) return Array.isArray(xRealIp) ? xRealIp[0] : xRealIp;
+  if (xForwardedFor) {
+    // x-forwarded-for can contain multiple IPs, get the first one
+    const forwarded = Array.isArray(xForwardedFor) ? xForwardedFor[0] : xForwardedFor;
+    return forwarded.split(",")[0].trim();
+  }
+  
+  return "unknown";
 }
 
 // Define Resolvers
@@ -77,15 +93,14 @@ const resolvers = {
     
     async userApiUsage(_: unknown, __: unknown, context: Context) {
       try {
-        return await getUserApiUsage(context.userId, context.clientIp);
+        return await getUserApiUsage(context.clientIp);
       } catch (error) {
         console.error("Error in userApiUsage resolver:", error);
         // Return a fallback response to prevent breaking the UI
         return {
           remaining: 0,
-          limit: context.userId ? 5 : 2,
+          limit: 5,
           reset: new Date(Date.now() + 86400000).toISOString(), // 24 hours from now
-          isAuthenticated: !!context.userId
         };
       }
     },
@@ -101,18 +116,20 @@ const resolvers = {
       try {
         // Check rate limit first
         try {
-          const rateLimit = await checkRateLimit(context.userId, context.clientIp);
+          const rateLimit = await checkRateLimit(context.clientIp);
           
           if (!rateLimit.success) {
+            const resetDate = new Date(Date.now() + rateLimit.reset);
+            const resetMinutes = Math.ceil(rateLimit.reset / 1000 / 60);
             return {
               success: false,
               jobId: null,
-              error: `Rate limit exceeded. Try again after ${new Date(Date.now() + rateLimit.reset).toLocaleString()}.`
+              error: `Rate limit exceeded. Please try again in ${resetMinutes} minutes (resets at ${resetDate.toLocaleTimeString()}).`
             };
           }
         } catch (rateError) {
           console.error("Rate limit check failed:", rateError);
-          // Continue despite rate limit error
+          // Continue despite rate limit error to avoid blocking legitimate users
         }
         
         const jobId = await startReadmeGeneration(repoUrl);
@@ -150,30 +167,15 @@ const server = new ApolloServer<Context>({
 const handler = startServerAndCreateNextHandler(server, {
   context: async (req) => {
     try {
-      // Get user authentication information from Clerk
-      let userId = null;
-      try {
-        const auth = getAuth(req);
-        userId = auth.userId;
-      } catch (clerkError) {
-        console.warn("Clerk auth not available:", clerkError);
-        // Continue without auth - user will be treated as guest
-      }
-      
-      // Get client IP for guest rate limiting
-      const forwarded = req.headers instanceof Headers && typeof req.headers.get === "function" ? req.headers.get("x-forwarded-for") : null;
-      const clientIp = forwarded ?
-        forwarded.split(",")[0] :
-        (req.headers instanceof Headers && typeof req.headers.get === "function" ? req.headers.get("x-real-ip") : null) || "unknown";
+      // Get client IP for rate limiting
+      const clientIp = getClientIp(req);
       
       return {
-        userId,
         clientIp
       };
     } catch (error) {
       console.error("Error creating context:", error);
       return {
-        userId: null,
         clientIp: "unknown"
       };
     }

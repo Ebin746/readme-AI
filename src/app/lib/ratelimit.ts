@@ -6,15 +6,14 @@ const redis = new Redis({
   token: process.env.UPSTASH_REDIS_REST_TOKEN || '',
 });
 
-// Rate limit configuration
-const RATE_LIMIT_AUTHENTICATED = 5; // 5 requests per day for authenticated users
-const RATE_LIMIT_GUEST = 2; // 2 requests per day for guests
+// Rate limit configuration - IP-based only
+const RATE_LIMIT_IP = 5; // 5 requests per day for all users
 const RATE_LIMIT_WINDOW = 86400; // 24 hours in seconds
 
-export async function checkRateLimit(userId: string | null, clientIp: string): Promise<{ success: boolean; reset: number }> {
+export async function checkRateLimit(clientIp: string): Promise<{ success: boolean; reset: number }> {
   try {
-    const key = userId ? `rate_limit:user:${userId}` : `rate_limit:ip:${clientIp}`;
-    const limit = userId ? RATE_LIMIT_AUTHENTICATED : RATE_LIMIT_GUEST;
+    const key = `rate_limit:ip:${clientIp}`;
+    const limit = RATE_LIMIT_IP;
     
     // Get current count
     const count = await redis.get<number>(key) || 0;
@@ -42,15 +41,14 @@ export async function checkRateLimit(userId: string | null, clientIp: string): P
   }
 }
 
-export async function getUserApiUsage(userId: string | null, clientIp: string): Promise<{
+export async function getUserApiUsage(clientIp: string): Promise<{
   remaining: number;
   limit: number;
   reset: string;
-  isAuthenticated: boolean;
 }> {
   try {
-    const key = userId ? `rate_limit:user:${userId}` : `rate_limit:ip:${clientIp}`;
-    const limit = userId ? RATE_LIMIT_AUTHENTICATED : RATE_LIMIT_GUEST;
+    const key = `rate_limit:ip:${clientIp}`;
+    const limit = RATE_LIMIT_IP;
     
     // Get current count
     const count = await redis.get<number>(key) || 0;
@@ -64,17 +62,15 @@ export async function getUserApiUsage(userId: string | null, clientIp: string): 
       remaining: Math.max(0, limit - count),
       limit,
       reset: resetDate.toISOString(),
-      isAuthenticated: !!userId
     };
   } catch (error) {
     console.error('Failed to get API usage:', error);
     
     // Return a default value
     return {
-      remaining: userId ? RATE_LIMIT_AUTHENTICATED : RATE_LIMIT_GUEST,
-      limit: userId ? RATE_LIMIT_AUTHENTICATED : RATE_LIMIT_GUEST,
+      remaining: RATE_LIMIT_IP,
+      limit: RATE_LIMIT_IP,
       reset: new Date(Date.now() + RATE_LIMIT_WINDOW * 1000).toISOString(),
-      isAuthenticated: !!userId
     };
   }
 }
