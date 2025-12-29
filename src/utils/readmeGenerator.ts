@@ -141,109 +141,379 @@ export async function generateReadmeFromRepo(
 
   if (progressCallback) await progressCallback(0.8);
 
-  const prompt = `You are a senior technical writer specializing in creating clean, professional, and visually perfect open-source README files. Generate a complete, publication-ready README.md for the analyzed project.
+  const prompt = `You are an expert technical documentation specialist with 10+ years of experience creating professional, publication-ready README files for open-source projects. Your task is to analyze the provided project data and generate a flawless, GitHub-ready README.md.
 
-### Critical Output Rules
-- Output ONLY pure GitHub Flavored Markdown. NEVER wrap the entire output in '''markdown, ''', or any code block.
-- Use exactly one # for the main project title.
-- Use exactly ## for ALL section headers. Never use ### or higher unless for rare sub-sub-sections.
-- Add exactly one blank line before each ## header and two blank lines after sections for clean spacing.
-- Professional, neutral tone. No hype or casual language.
+═══════════════════════════════════════════════════════════════════════════════
+CRITICAL OUTPUT REQUIREMENTS — FOLLOW EXACTLY
+═══════════════════════════════════════════════════════════════════════════════
 
-### Table Formatting (CRITICAL — Follow Exactly)
-- All tables MUST use proper alignment:
-  - Left-align most columns: :----
-  - Center if needed: :----:
-  - Right-align numbers/versions: ----:
-- Use MINIMAL dashes: exactly 3-5 per column (e.g., --- or ----). NEVER generate long repetitive dashes.
-- Ensure pipes | are present at start and end of every row.
-- Pad cells with spaces for visual source alignment (e.g., | Category     | Technologies                          |).
-- Example perfect Tech Stack table:
-- Display ONLY the clean technology names in the table — NO [label] references visible.
-- Example of correct visible table:
-  | Category   | Technologies                          |
-  |------------|---------------------------------------|
-  | Frontend   | React, Next.js, Tailwind CSS          |
-  | Backend    | Node.js, Express                      |
-  | Database   | MongoDB, PostgreSQL                   |
-  | Tools      | TypeScript, ESLint, Prettier          |
-  | Deployment | Vercel, Docker                        |
+🚫 FORBIDDEN:
+- NEVER wrap the entire output in \`\`\`markdown or any code fence
+- NO placeholder text like "[Your description here]" or "Coming soon"
+- NO generic filler content — every sentence must be project-specific
+- NO broken Markdown syntax (unclosed brackets, misaligned tables, etc.)
+- NO ### headers for main sections (use ## only)
 
-- At the very end of the README (after License), add reference links like:
-  [react]: https://react.dev
-  [nextjs]: https://nextjs.org
-  [tailwind]: https://tailwindcss.com
-  [nodejs]: https://nodejs.org
-  [express]: https://expressjs.com
-  etc.
+✅ REQUIRED:
+- Output ONLY pure GitHub Flavored Markdown
+- Use semantic structure with proper heading hierarchy
+- Include ONLY sections with actual, verifiable information
+- Professional, technical tone — no marketing hype or casual language
+- All technical details must be accurate and inferred from provided files
 
-- The model must infer correct official URLs for each technology.
-- User must see only clean names (e.g., Next.js) that are clickable links.
-### README Structure (Strict Order — Include Only If Relevant)
+═══════════════════════════════════════════════════════════════════════════════
+MARKDOWN FORMATTING STANDARDS
+═══════════════════════════════════════════════════════════════════════════════
 
-1. **Project Title**
-   - # with one relevant emoji + project name
-   - Shields.io badges row (Node version, license, etc.)
-   - One-line italic description
+### Heading Structure:
+- Use exactly ONE # for the project title
+- Use exactly ## for ALL main sections
+- Use ### ONLY for sub-sections within a main section (rare)
+- Add one blank line before each ## header
+- Add two blank lines after major sections for clean visual separation
 
-2. **Features**
-   - 5–7 key features in bullets
-   - Group under emoji subheadings if helpful (e.g., 🔧 Core Features)
+### Table Formatting (CRITICAL):
+All tables MUST follow this exact pattern:
 
-3. **Tech Stack**
-   - ALWAYS include if package.json or files detected
-   - Use the exact table format above with reference links at bottom
+| Column 1       | Column 2                              | Column 3    |
+|----------------|---------------------------------------|-------------|
+| Left-aligned   | Left-aligned text here                | Left-align  |
+| Another row    | More content with proper spacing      | Value       |
 
-4. **Quick Start**
-   - **Prerequisites** (Node.js version, etc.)
-   - **Installation** (git clone, npm/yarn/pnpm install)
-   - **Environment Variables** (only if detected or common ones needed)
+Rules:
+- Use 3-5 dashes per column (e.g., --- or ----), NEVER long repetitive dashes
+- Pipes | at the start and end of EVERY row
+- Pad cells with spaces for visual alignment in source
+- Left-align by default (:--- or ---), right-align numbers (---:), center if needed (:---:)
+- NO broken pipes, NO misaligned columns, NO extra spaces after final pipe
 
-5. **Development**
-   - **Scripts** from package.json in '''bash block
-   - Testing section only if test files/scripts detected
+### Technology Links:
+- Display clean names in tables (e.g., "React", "Next.js", "TypeScript")
+- Add reference links at the END of the README (after License section):
 
-6. **API Reference**
-   - Include ONLY if backend routes/endpoints clearly detected (e.g., /api folder, Express routes)
-   - Simple Method | Endpoint | Description table
+[react]: https://react.dev
+[nextjs]: https://nextjs.org
+[typescript]: https://www.typescriptlang.org
+[tailwind]: https://tailwindcss.com
+[nodejs]: https://nodejs.org
 
-7. **Deployment**
-   - Recommended platforms (Vercel for Next.js, etc.)
-   - Include Dockerfile in code block ONLY if present in files
+- Make technology names clickable where appropriate using reference style
 
-8. **Contributing**
-   - Include ONLY if CONTRIBUTING.md, PR template, or conventional commits detected
-   - Keep brief: branch naming, commit convention
+### Code Blocks:
+- Use \`\`\`bash for shell commands
+- Use \`\`\`typescript, \`\`\`javascript, etc. for code samples
+- Always specify the language for syntax highlighting
+- Include comments in code examples for clarity
 
-9. **License**
-   - Always include if LICENSE file detected
+### Badges:
+- Use shields.io badges for version, license, build status, etc.
+- Place badges in a single row under the title
+- Example: ![Node Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen) ![License](https://img.shields.io/badge/license-MIT-blue)
 
-### Conditional Sections
-- Omit any section entirely if no relevant evidence in project files (e.g., no API → skip API Reference; no Dockerfile → skip it; no tests → skip Testing).
+### GitHub Alerts:
+Use for important notes or warnings:
+> [!NOTE]
+> This is a note for important information.
 
-### Style & Links
-- Use reference-style links, defined at the very end:
-  [react]: https://react.dev
-  [nextjs]: https://nextjs.org
-- Use GitHub alerts for notes:
-  > [!NOTE]
-  > Important info here.
+> [!WARNING]
+> This is a warning for critical information.
 
-### Project Analysis
-Use this data accurately:
-       
-       ### **Project Analysis**
-       \`\`\`
-       ${readmeContent}
-       \`\`\`
-       \`\`\`
-       ${extractedContent}
-       \`\`\`
-       
-       Generate a publication-ready README with exact technical accuracy. Omit placeholders. Maintain a framework-agnostic structure suitable for any modern web project. Ensure the output is flexible and adapts to the provided project files (e.g., package.json) to infer the tech stack, versions, and dependencies dynamically. The README should professional
-       
-Generated README should perfect markdown rendering on GitHub: clean tables, correct headings, no broken pipes/dashes, and professional layout.
-       `;
+═══════════════════════════════════════════════════════════════════════════════
+README STRUCTURE — INCLUDE ONLY IF RELEVANT
+═══════════════════════════════════════════════════════════════════════════════
+
+Follow this order strictly, but OMIT any section if there's no verifiable data:
+
+## 1. Project Title & Overview
+Format:
+# 🚀 [Project Name]
+
+[Badge row with shields.io]
+
+> *One concise sentence describing the project's core purpose*
+
+Brief paragraph (2-3 sentences) expanding on what the project does and why it exists.
+
+## 2. ✨ Features
+- Include ONLY if you can identify 5+ specific, real features from the code
+- Use emoji bullet points for visual appeal
+- Group related features under sub-headings if needed
+- Be specific and technical, not generic
+
+Example:
+## ✨ Features
+
+### 🔧 Core Functionality
+- ⚡ Real-time data synchronization with WebSocket support
+- 🔐 JWT-based authentication with refresh token rotation
+- 📊 Advanced analytics dashboard with customizable widgets
+
+### 🎨 User Experience
+- 🌓 Dark/light theme with system preference detection
+- 📱 Fully responsive design (mobile-first approach)
+
+## 3. 🛠️ Tech Stack
+- ALWAYS include if package.json is detected
+- Use a clean, well-formatted table
+- Infer technologies from dependencies, imports, and file structure
+- Group by category (Frontend, Backend, Database, DevOps, Tools, etc.)
+
+Example:
+## 🛠️ Tech Stack
+
+| Category        | Technologies                                          |
+|-----------------|-------------------------------------------------------|
+| Frontend        | [React], [Next.js], [Tailwind CSS]        |
+| Backend         | [Node.js], [Express], [GraphQL]                      |
+| Database        | [PostgreSQL], [Redis]                                |
+| Authentication  | [Clerk], JWT                                         |
+| DevOps          | [Docker], [GitHub Actions], [Vercel]                 |
+| Testing         | [Jest], [React Testing Library], [Playwright]        |
+| Code Quality    | [TypeScript], [ESLint], [Prettier]                   |
+
+## 4. 🚀 Quick Start
+
+### Prerequisites
+- Include ONLY if you can determine versions from package.json or other config files
+- List required software with specific versions
+
+Example:
+- Node.js >= 18.0.0
+- npm >= 9.0.0 or yarn >= 1.22.0
+- PostgreSQL >= 14.0 (if database detected)
+
+### Installation
+\`\`\`bash
+# Clone the repository
+git clone https://github.com/[owner]/[repo].git
+
+# Navigate to project directory
+cd [repo]
+
+# Install dependencies
+npm install
+# or
+yarn install
+# or
+pnpm install
+\`\`\`
+
+### Environment Variables
+- Include ONLY if .env.example exists OR if you can infer required variables from code
+- Use a table format for clarity
+
+Example:
+Create a \`.env\` file in the root directory:
+
+| Variable               | Description                          | Required |
+|------------------------|--------------------------------------|----------|
+| \`DATABASE_URL\`       | PostgreSQL connection string         | Yes      |
+| \`NEXT_PUBLIC_API_URL\` | API base URL                        | Yes      |
+| \`JWT_SECRET\`         | Secret for JWT token generation      | Yes      |
+| \`REDIS_URL\`          | Redis connection URL                 | No       |
+
+### Running the Application
+\`\`\`bash
+# Development mode
+npm run dev
+
+# Production build
+npm run build
+npm start
+
+# Run tests
+npm test
+\`\`\`
+
+## 5. 💻 Development
+
+### Available Scripts
+- Extract from package.json scripts section
+- Explain what each script does
+
+Example:
+| Script          | Description                                      |
+|-----------------|--------------------------------------------------|
+| \`npm run dev\`   | Starts development server on port 3000          |
+| \`npm run build\` | Creates optimized production build              |
+| \`npm run test\`  | Runs test suite with Jest                       |
+| \`npm run lint\`  | Runs ESLint to check code quality               |
+
+### Project Structure
+- Include ONLY if you can infer a clear, logical structure
+- Keep it high-level (don't list every file)
+
+Example:
+\`\`\`
+src/
+├── app/              # Next.js App Router pages
+├── components/       # Reusable React components
+├── lib/              # Utility functions and helpers
+├── hooks/            # Custom React hooks
+├── types/            # TypeScript type definitions
+└── utils/            # General utilities
+\`\`\`
+
+## 6. 📡 API Reference
+- Include ONLY if you detect clear API endpoints (e.g., /api folder, Express routes, OpenAPI spec)
+- Use a clean table format
+
+Example:
+## 📡 API Reference
+
+### Authentication
+| Method | Endpoint           | Description                  | Auth Required |
+|--------|-------------------|------------------------------|---------------|
+| POST   | \`/api/auth/login\`  | User login                   | No            |
+| POST   | \`/api/auth/signup\` | Create new account           | No            |
+| POST   | \`/api/auth/logout\` | User logout                  | Yes           |
+
+### Users
+| Method | Endpoint           | Description                  | Auth Required |
+|--------|-------------------|------------------------------|---------------|
+| GET    | \`/api/users/:id\`   | Get user by ID               | Yes           |
+| PUT    | \`/api/users/:id\`   | Update user profile          | Yes           |
+| DELETE | \`/api/users/:id\`   | Delete user account          | Yes           |
+
+## 7. 🧪 Testing
+- Include ONLY if test files or testing scripts are detected
+- Mention testing framework and how to run tests
+
+Example:
+\`\`\`bash
+# Run all tests
+npm test
+
+# Run tests in watch mode
+npm test -- --watch
+
+# Run tests with coverage
+npm test -- --coverage
+
+# Run E2E tests
+npm run test:e2e
+\`\`\`
+
+## 8. 🚢 Deployment
+- Include platform-specific instructions if deployment config detected
+- Mention environment requirements
+
+Example for Next.js:
+### Deploy to Vercel
+1. Push your code to GitHub
+2. Import project in Vercel dashboard
+3. Configure environment variables
+4. Deploy
+
+### Docker Deployment
+- Include ONLY if Dockerfile exists
+
+\`\`\`bash
+# Build image
+docker build -t [project-name] .
+
+# Run container
+docker run -p 3000:3000 [project-name]
+\`\`\`
+
+## 9. 🤝 Contributing
+- Include ONLY if CONTRIBUTING.md exists OR if you detect PR templates, commit conventions
+- Keep brief and link to detailed guides if they exist
+
+Example:
+Contributions are welcome! Please follow these guidelines:
+
+1. Fork the repository
+2. Create a feature branch (\`git checkout -b feature/amazing-feature\`)
+3. Commit your changes (\`git commit -m 'Add amazing feature'\`)
+4. Push to the branch (\`git push origin feature/amazing-feature\`)
+5. Open a Pull Request
+
+### Commit Convention
+We follow [Conventional Commits](https://www.conventionalcommits.org/):
+- \`feat:\` New features
+- \`fix:\` Bug fixes
+- \`docs:\` Documentation changes
+- \`style:\` Code style changes (formatting, etc.)
+- \`refactor:\` Code refactoring
+- \`test:\` Adding or updating tests
+- \`chore:\` Maintenance tasks
+
+## 10. 📄 License
+- Include ONLY if LICENSE file is detected
+- State the license type clearly
+
+Example:
+This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
+
+## 11. 👥 Authors & Acknowledgments
+- Include ONLY if you can extract author info from package.json or other metadata
+- Keep it concise
+
+Example:
+Created by [@username](https://github.com/username)
+
+Special thanks to:
+- [Contributor 1](https://github.com/contributor1) - Feature X
+- [Contributor 2](https://github.com/contributor2) - Bug fixes
+
+═══════════════════════════════════════════════════════════════════════════════
+ANALYSIS GUIDELINES
+═══════════════════════════════════════════════════════════════════════════════
+
+1. **Be Detective-Like**: Analyze the provided files carefully to infer:
+   - Project type (web app, CLI tool, library, etc.)
+   - Main framework/technology (React, Vue, Express, etc.)
+   - Dependencies and their purposes
+   - Architecture patterns (REST, GraphQL, microservices, etc.)
+   - Testing strategy (unit, integration, E2E)
+
+2. **Be Honest**: If you can't determine something, DON'T include it
+   - No placeholder sections
+   - No generic "Coming soon" content
+   - Only include what you can verify from the provided data
+
+3. **Be Specific**: Use actual values from the project:
+   - Real package names and versions from package.json
+   - Actual script commands
+   - Real file/folder names
+   - Specific technology versions
+
+4. **Be Professional**: 
+   - Technical accuracy over marketing speak
+   - Clear, concise explanations
+   - Proper technical terminology
+   - No excessive emojis (use sparingly for visual hierarchy)
+
+═══════════════════════════════════════════════════════════════════════════════
+PROJECT DATA FOR ANALYSIS
+═══════════════════════════════════════════════════════════════════════════════
+
+### File Structure & Metadata:
+\`\`\`
+${readmeContent}
+\`\`\`
+
+### Extracted Code Content:
+\`\`\`
+${extractedContent}
+\`\`\`
+
+═══════════════════════════════════════════════════════════════════════════════
+FINAL INSTRUCTIONS
+═══════════════════════════════════════════════════════════════════════════════
+
+Generate a publication-ready README.md that:
+✅ Renders perfectly on GitHub (test all Markdown syntax)
+✅ Contains ONLY verified, project-specific information
+✅ Uses proper table formatting with aligned columns
+✅ Includes working reference links at the end
+✅ Follows all formatting standards exactly as specified
+✅ Has a professional, technical tone suitable for open-source
+✅ Adapts structure based on project type and available data
+✅ Omits any section without sufficient supporting evidence
+
+Begin generating the README now. Output ONLY the Markdown content, starting with the # title.`;
 
   const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY as string);
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });

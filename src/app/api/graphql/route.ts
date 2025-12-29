@@ -3,7 +3,6 @@ import { startServerAndCreateNextHandler } from "@as-integrations/next";
 import { gql } from "graphql-tag";
 import { startReadmeGeneration, getReadmeGenerationStatus, cancelReadmeGeneration } from "@/utils/jobManger";
 import { NextRequest } from "next/server";
-import { NextApiRequest } from "next";
 import { checkRateLimit, getUserApiUsage } from "../../lib/ratelimit";
 
 // Define GraphQL Schema
@@ -53,25 +52,40 @@ const typeDefs = gql`
 `;
 
 interface Context {
-  clientIp: string;
+  // clientKey is of the form `device:<deviceId>` or `ip:<ipAddress>`
+  clientKey: string;
 }
 
 // Helper function to get client IP
-function getClientIp(req: NextApiRequest): string {
-  // Try various headers in order of reliability
-  const cfConnectingIp = req.headers["cf-connecting-ip"];
-  const xRealIp = req.headers["x-real-ip"];
-  const xForwardedFor = req.headers["x-forwarded-for"];
-  
-  if (cfConnectingIp) return Array.isArray(cfConnectingIp) ? cfConnectingIp[0] : cfConnectingIp;
-  if (xRealIp) return Array.isArray(xRealIp) ? xRealIp[0] : xRealIp;
-  if (xForwardedFor) {
-    // x-forwarded-for can contain multiple IPs, get the first one
-    const forwarded = Array.isArray(xForwardedFor) ? xForwardedFor[0] : xForwardedFor;
-    return forwarded.split(",")[0].trim();
+function getClientIp(req: { headers?: { get?: (name: string) => string | null } & Record<string, string | string[] | undefined> }): string {
+  try {
+    // Abstract header access so this works for NextRequest (Headers) and NextApiRequest (plain object)
+    const getHeader = (name: string) => {
+      if (!req.headers) return undefined;
+      if (typeof req.headers.get === 'function') {
+        return req.headers.get(name);
+      } else {
+        const val = (req.headers as Record<string, string | string[]>)[name];
+        return Array.isArray(val) ? val[0] : val;
+      }
+    };
+
+    const cfConnectingIp = getHeader('cf-connecting-ip');
+    const xRealIp = getHeader('x-real-ip');
+    const xForwardedFor = getHeader('x-forwarded-for');
+
+    if (cfConnectingIp) return Array.isArray(cfConnectingIp) ? cfConnectingIp[0] : cfConnectingIp;
+    if (xRealIp) return Array.isArray(xRealIp) ? xRealIp[0] : xRealIp;
+
+    if (xForwardedFor) {
+      const forwarded = Array.isArray(xForwardedFor) ? xForwardedFor[0] : xForwardedFor;
+      return forwarded.split(',')[0].trim();
+    }
+  } catch (e) {
+    console.error('Failed to extract client IP:', e);
   }
-  
-  return "unknown";
+
+  return 'unknown';
 }
 
 // Define Resolvers
@@ -93,7 +107,7 @@ const resolvers = {
     
     async userApiUsage(_: unknown, __: unknown, context: Context) {
       try {
-        return await getUserApiUsage(context.clientIp);
+        return await getUserApiUsage(context.clientKey);
       } catch (error) {
         console.error("Error in userApiUsage resolver:", error);
         // Return a fallback response to prevent breaking the UI
@@ -116,7 +130,7 @@ const resolvers = {
       try {
         // Check rate limit first
         try {
-          const rateLimit = await checkRateLimit(context.clientIp);
+          const rateLimit = await checkRateLimit(context.clientKey);
           
           if (!rateLimit.success) {
             const resetDate = new Date(Date.now() + rateLimit.reset);
@@ -169,14 +183,33 @@ const handler = startServerAndCreateNextHandler(server, {
     try {
       // Get client IP for rate limiting
       const clientIp = getClientIp(req);
-      
+
+      // Parse device id from cookie if present (set client-side)
+      // Support both NextRequest (Headers) and NextApiRequest/IncomingMessage style headers
+      let cookieHeader = '';
+      if (req.headers && typeof (req.headers as Record<string, unknown>).get === 'function') {
+        cookieHeader = (((req.headers as Record<string, unknown>).get as (key: string) => string)('cookie') as string) || '';
+      } else if (req.headers && 'cookie' in req.headers) {
+        cookieHeader = (req.headers.cookie as string) || '';
+      }
+      const getCookieFromHeader = (name: string) => {
+        if (!cookieHeader) return null;
+        const match = cookieHeader.split(';').map((c: string) => c.trim()).find((c: string) => c.startsWith(name + '='));
+        if (!match) return null;
+        return decodeURIComponent(match.split('=')[1] || '');
+      };
+
+      const deviceId = getCookieFromHeader('rm_device_id');
+      // Build a clientKey that clearly indicates the identifier type
+      const clientKey = deviceId ? `device:${deviceId}` : `ip:${clientIp}`;
+
       return {
-        clientIp
+        clientKey
       };
     } catch (error) {
       console.error("Error creating context:", error);
       return {
-        clientIp: "unknown"
+        clientKey: `ip:unknown`
       };
     }
   },

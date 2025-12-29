@@ -80,6 +80,7 @@ export function useReadmeGeneration(repoUrl: string) {
       try {
         const response = await fetch("/api/graphql", {
           method: "POST",
+          credentials: 'same-origin',
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             query: `
@@ -169,6 +170,7 @@ export function useReadmeGeneration(repoUrl: string) {
     try {
       const startJobResponse = await fetch("/api/graphql", {
         method: "POST",
+        credentials: 'same-origin',
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: `
@@ -213,6 +215,7 @@ export function useReadmeGeneration(repoUrl: string) {
     try {
       const cancelResponse = await fetch("/api/graphql", {
         method: "POST",
+        credentials: 'same-origin',
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           query: `

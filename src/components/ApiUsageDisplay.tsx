@@ -18,15 +18,47 @@ export function ApiUsageDisplay() {
     return resetDate.toISOString();
   };
 
+  // Small UUID v4 generator for device id
+  const generateUUID = () => {
+    return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+      const r = (Math.random() * 16) | 0;
+      const v = c === 'x' ? r : (r & 0x3) | 0x8;
+      return v.toString(16);
+    });
+  };
+
+  const getCookie = (name: string) => {
+    if (typeof document === 'undefined') return null;
+    const match = document.cookie.split(';').map(c => c.trim()).find(c => c.startsWith(name + '='));
+    if (!match) return null;
+    return decodeURIComponent(match.split('=')[1] || '');
+  };
+
+  const setCookie = (name: string, value: string, days = 365) => {
+    if (typeof document === 'undefined') return;
+    const expires = new Date(Date.now() + days * 24 * 60 * 60 * 1000).toUTCString();
+    // secure, SameSite=strict, path=/ so it's sent on same-origin requests
+    document.cookie = `${name}=${encodeURIComponent(value)}; Expires=${expires}; Path=/; SameSite=Strict`;
+  };
+
   useEffect(() => {
     async function fetchUsage() {
       try {
+        // Ensure we have a persistent device id cookie (per-device quota)
+        let deviceId = getCookie('rm_device_id');
+        if (!deviceId) {
+          deviceId = generateUUID();
+          setCookie('rm_device_id', deviceId, 365);
+        }
+
         // Add a timeout to prevent hanging requests
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 5000);
         
         const response = await fetch("/api/graphql", {
           method: "POST",
+          // Send credentials so the cookie is included in the request
+          credentials: 'same-origin',
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
             query: `
