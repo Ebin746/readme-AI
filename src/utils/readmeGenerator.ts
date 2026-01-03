@@ -1,18 +1,21 @@
 import { GoogleGenerativeAI } from "@google/generative-ai";
-import extractContent from "@/utils/extractiveSummarization";
 import { excludeList, excludeExtensions } from "@/utils/excludingList";
+import { generateEmbeddings, generateQueryEmbedding, FileWithContent } from "@/utils/embedder";
+import { selectFilesWithMMR, DEFAULT_MMR_CONFIG, README_GENERATION_QUERY } from "@/utils/mmrSelector";
+import { buildReadmeContext, buildFileListSummary, DEFAULT_CONTEXT_CONFIG } from "@/utils/readmeContextBuilder";
 
 const GITHUB_API_BASE = "https://api.github.com/repos";
-
 
 interface GitHubFile {
   type: "file" | "dir";
   path: string;
   name: string;
-  download_url?: string; // Only present for files
+  download_url?: string;
 }
 
-// Improved function to fetch repo contents using tree API
+/**
+ * Fetches repository contents using GitHub tree API
+ */
 async function fetchRepoContents(
   owner: string,
   repo: string,
@@ -32,9 +35,9 @@ async function fetchRepoContents(
   const repoData = await repoResponse.json();
   const defaultBranch = repoData.default_branch;
 
-  if (updateProgress) await updateProgress(0.1); // 10% progress
+  if (updateProgress) await updateProgress(0.05);
 
-  // Use the tree API with recursive flag for better performance
+  // Use the tree API with recursive flag
   const treeUrl = `${GITHUB_API_BASE}/${owner}/${repo}/git/trees/${defaultBranch}?recursive=1`;
   const response = await fetch(treeUrl, {
     headers: {
@@ -48,16 +51,16 @@ async function fetchRepoContents(
   if (!response.ok) throw new Error(`GitHub API Error: ${response.statusText}`);
   const data = await response.json();
 
-  if (updateProgress) await updateProgress(0.2); // 20% progress
+  if (updateProgress) await updateProgress(0.1);
 
-  // Only return actual files, not directories, and filter out excluded files
+  // Filter and return files
   return data.tree
-    .filter((item: { type: string; path: string; }) =>
+    .filter((item: { type: string; path: string }) =>
       item.type === "blob" &&
       !excludeList.some(ex => item.path.includes(ex)) &&
       !excludeExtensions.some(ext => item.path.endsWith(ext))
     )
-    .map((item: { path: string; }) => ({
+    .map((item: { path: string }) => ({
       type: "file",
       path: item.path,
       name: item.path.split('/').pop() || "",
@@ -65,13 +68,18 @@ async function fetchRepoContents(
     }));
 }
 
+/**
+ * Fetches content of a single file
+ */
 async function fetchFileContent(downloadUrl: string, signal: AbortSignal): Promise<string> {
   const response = await fetch(downloadUrl, { signal, cache: "force-cache" });
   if (!response.ok) throw new Error(`Failed to fetch file content from ${downloadUrl}`);
   return response.text();
 }
 
-// Add progress callback parameter
+/**
+ * Main function to generate README from repository
+ */
 export async function generateReadmeFromRepo(
   repoUrl: string,
   progressCallback?: (progress: number) => Promise<void>,
@@ -82,75 +90,100 @@ export async function generateReadmeFromRepo(
 
   const [, githubUser, repoName] = match;
 
-  // Get all files using the optimized tree API
+  // Step 1: Get all files (10% progress)
   const filesList = await fetchRepoContents(githubUser, repoName, signal, progressCallback);
+  if (progressCallback) await progressCallback(0.15);
 
-  if (progressCallback) await progressCallback(0.3); // 30% progress
-
-  // Create file list for README
-  let readmeContent = `# ${repoName}\n\n## File List\n\n`;
-  filesList.forEach(file => {
-    readmeContent += `- ${file.path}\n`;
-  });
-
-  if (progressCallback) await progressCallback(0.4); // 40% progress
-
-  // Determine important files to analyze
-  // Focus on key files that reveal project structure
-  const keyFiles = ['package.json', '.eslintrc', 'tsconfig.json'];
-  const sourceFiles = ['.js', '.jsx', '.ts', '.tsx', '.md'];
+  // Step 2: Identify important files to fetch
+  const keyFiles = [
+  'README.md',
+  'package.json',
+  'pubspec.yaml',
+  'pom.xml',
+  'build.gradle',
+  'go.mod',
+  'Cargo.toml',
+  'requirements.txt'
+];
+  const sourceExtensions = [
+  '.js','.jsx','.ts','.tsx',
+  '.dart','.py','.go','.java',
+  '.rs','.cpp','.c','.md','.yaml'
+];
 
   const priorityFiles = filesList.filter(file =>
-    keyFiles.includes(file.name) || keyFiles.some(key => file.path.includes(key))
+    keyFiles.some(key => file.path.toLowerCase().includes(key.toLowerCase()))
   );
 
-  // Add some representative source files
   const sourceCodeFiles = filesList
-    .filter(file => sourceFiles.some(ext => file.path.endsWith(ext)))
+    .filter(file => sourceExtensions.some(ext => file.path.endsWith(ext)))
     .filter(file => !file.path.includes('node_modules') && !file.path.includes('dist'))
-    .slice(0, 10); // Limit to 10 source files
+    .slice(0, 20); // Fetch up to 20 source files
 
-  // Combine priority files with source files
-  const filesToFetch = [...priorityFiles, ...sourceCodeFiles].slice(0, 15);
+  const filesToFetch = [...new Set([...priorityFiles, ...sourceCodeFiles])].slice(0, 25);
 
-  // Fetch file contents in parallel
+  if (progressCallback) await progressCallback(0.2);
+
+  // Step 3: Fetch file contents in parallel (20% -> 40%)
   const contentPromises = filesToFetch.map(async (file, index) => {
     try {
       const content = await fetchFileContent(file.download_url!, signal);
       if (progressCallback) {
-        // Update progress from 40% to 70% during file fetching
-        await progressCallback(0.4 + (index / filesToFetch.length) * 0.3);
+        await progressCallback(0.2 + (index / filesToFetch.length) * 0.2);
       }
       return { path: file.path, content };
     } catch (error) {
       console.error(`Error fetching ${file.path}:`, error);
-      return { path: file.path, content: "" };
+      return null;
     }
   });
 
-  const fileContents = await Promise.all(contentPromises);
-  const codeFiles: Record<string, string> = {};
-  fileContents.forEach(({ path, content }) => {
-    codeFiles[path] = content;
-  });
+  const fileContentsRaw = await Promise.all(contentPromises);
+  const fileContents: FileWithContent[] = fileContentsRaw.filter(
+    (f): f is FileWithContent => f !== null
+  );
 
-  if (progressCallback) await progressCallback(0.7); // 70% progress
+  if (progressCallback) await progressCallback(0.4);
 
-  readmeContent += `\n## File Contents\n\n`;
-  const extractedContent = extractContent(JSON.stringify(codeFiles));
+  // Step 4: Generate embeddings (40% -> 55%)
+  console.log(`Generating embeddings for ${fileContents.length} files...`);
+  const filesWithEmbeddings = await generateEmbeddings(fileContents, signal);
+  
+  if (progressCallback) await progressCallback(0.55);
 
-  if (progressCallback) await progressCallback(0.8);
+  // Step 5: Generate query embedding and select files with MMR (55% -> 65%)
+  console.log("Selecting most relevant files using MMR...");
+  const queryEmbedding = await generateQueryEmbedding(README_GENERATION_QUERY);
+  
+  const selectedFiles = selectFilesWithMMR(
+    filesWithEmbeddings,
+    queryEmbedding,
+    DEFAULT_MMR_CONFIG
+  );
 
+  console.log(`Selected ${selectedFiles.length} files for README generation:`, 
+    selectedFiles.map(f => f.path)
+  );
+
+  if (progressCallback) await progressCallback(0.65);
+
+  // Step 6: Build context for LLM (65% -> 70%)
+  const fileListSummary = buildFileListSummary(filesList.map(f => f.path));
+  const selectedFilesContext = buildReadmeContext(selectedFiles, DEFAULT_CONTEXT_CONFIG);
+
+  if (progressCallback) await progressCallback(0.7);
+
+  // Step 7: Generate README with LLM (70% -> 95%)
   const prompt = `You are an expert technical documentation specialist with 10+ years of experience creating professional, publication-ready README files for open-source projects. Your task is to analyze the provided project data and generate a flawless, GitHub-ready README.md.
 
 ═══════════════════════════════════════════════════════════════════════════════
-CRITICAL OUTPUT REQUIREMENTS — FOLLOW EXACTLY
+CRITICAL OUTPUT REQUIREMENTS – FOLLOW EXACTLY
 ═══════════════════════════════════════════════════════════════════════════════
 
 🚫 FORBIDDEN:
 - NEVER wrap the entire output in \`\`\`markdown or any code fence
 - NO placeholder text like "[Your description here]" or "Coming soon"
-- NO generic filler content — every sentence must be project-specific
+- NO generic filler content – every sentence must be project-specific
 - NO broken Markdown syntax (unclosed brackets, misaligned tables, etc.)
 - NO ### headers for main sections (use ## only)
 
@@ -158,7 +191,7 @@ CRITICAL OUTPUT REQUIREMENTS — FOLLOW EXACTLY
 - Output ONLY pure GitHub Flavored Markdown
 - Use semantic structure with proper heading hierarchy
 - Include ONLY sections with actual, verifiable information
-- Professional, technical tone — no marketing hype or casual language
+- Professional, technical tone – no marketing hype or casual language
 - All technical details must be accurate and inferred from provided files
 
 ═══════════════════════════════════════════════════════════════════════════════
@@ -187,18 +220,6 @@ Rules:
 - Left-align by default (:--- or ---), right-align numbers (---:), center if needed (:---:)
 - NO broken pipes, NO misaligned columns, NO extra spaces after final pipe
 
-### Technology Links:
-- Display clean names in tables (e.g., "React", "Next.js", "TypeScript")
-- Add reference links at the END of the README (after License section):
-
-[react]: https://react.dev
-[nextjs]: https://nextjs.org
-[typescript]: https://www.typescriptlang.org
-[tailwind]: https://tailwindcss.com
-[nodejs]: https://nodejs.org
-
-- Make technology names clickable where appropriate using reference style
-
 ### Code Blocks:
 - Use \`\`\`bash for shell commands
 - Use \`\`\`typescript, \`\`\`javascript, etc. for code samples
@@ -210,252 +231,23 @@ Rules:
 - Place badges in a single row under the title
 - Example: ![Node Version](https://img.shields.io/badge/node-%3E%3D18.0.0-brightgreen) ![License](https://img.shields.io/badge/license-MIT-blue)
 
-### GitHub Alerts:
-Use for important notes or warnings:
-> [!NOTE]
-> This is a note for important information.
-
-> [!WARNING]
-> This is a warning for critical information.
-
 ═══════════════════════════════════════════════════════════════════════════════
-README STRUCTURE — INCLUDE ONLY IF RELEVANT
+README STRUCTURE – INCLUDE ONLY IF RELEVANT
 ═══════════════════════════════════════════════════════════════════════════════
 
 Follow this order strictly, but OMIT any section if there's no verifiable data:
 
 ## 1. Project Title & Overview
-Format:
-# 🚀 [Project Name]
-
-[Badge row with shields.io]
-
-> *One concise sentence describing the project's core purpose*
-
-Brief paragraph (2-3 sentences) expanding on what the project does and why it exists.
-
-## 2. ✨ Features
-- Include ONLY if you can identify 5+ specific, real features from the code
-- Use emoji bullet points for visual appeal
-- Group related features under sub-headings if needed
-- Be specific and technical, not generic
-
-Example:
-## ✨ Features
-
-### 🔧 Core Functionality
-- ⚡ Real-time data synchronization with WebSocket support
-- 🔐 JWT-based authentication with refresh token rotation
-- 📊 Advanced analytics dashboard with customizable widgets
-
-### 🎨 User Experience
-- 🌓 Dark/light theme with system preference detection
-- 📱 Fully responsive design (mobile-first approach)
-
-## 3. 🛠️ Tech Stack
-- ALWAYS include if package.json is detected
-- Use a clean, well-formatted table
-- Infer technologies from dependencies, imports, and file structure
-- Group by category (Frontend, Backend, Database, DevOps, Tools, etc.)
-
-Example:
-## 🛠️ Tech Stack
-
-| Category        | Technologies                                          |
-|-----------------|-------------------------------------------------------|
-| Frontend        | [React], [Next.js], [Tailwind CSS]        |
-| Backend         | [Node.js], [Express], [GraphQL]                      |
-| Database        | [PostgreSQL], [Redis]                                |
-| Authentication  | [Clerk], JWT                                         |
-| DevOps          | [Docker], [GitHub Actions], [Vercel]                 |
-| Testing         | [Jest], [React Testing Library], [Playwright]        |
-| Code Quality    | [TypeScript], [ESLint], [Prettier]                   |
-
-## 4. 🚀 Quick Start
-
-### Prerequisites
-- Include ONLY if you can determine versions from package.json or other config files
-- List required software with specific versions
-
-Example:
-- Node.js >= 18.0.0
-- npm >= 9.0.0 or yarn >= 1.22.0
-- PostgreSQL >= 14.0 (if database detected)
-
-### Installation
-\`\`\`bash
-# Clone the repository
-git clone https://github.com/[owner]/[repo].git
-
-# Navigate to project directory
-cd [repo]
-
-# Install dependencies
-npm install
-# or
-yarn install
-# or
-pnpm install
-\`\`\`
-
-### Environment Variables
-- Include ONLY if .env.example exists OR if you can infer required variables from code
-- Use a table format for clarity
-
-Example:
-Create a \`.env\` file in the root directory:
-
-| Variable               | Description                          | Required |
-|------------------------|--------------------------------------|----------|
-| \`DATABASE_URL\`       | PostgreSQL connection string         | Yes      |
-| \`NEXT_PUBLIC_API_URL\` | API base URL                        | Yes      |
-| \`JWT_SECRET\`         | Secret for JWT token generation      | Yes      |
-| \`REDIS_URL\`          | Redis connection URL                 | No       |
-
-### Running the Application
-\`\`\`bash
-# Development mode
-npm run dev
-
-# Production build
-npm run build
-npm start
-
-# Run tests
-npm test
-\`\`\`
-
-## 5. 💻 Development
-
-### Available Scripts
-- Extract from package.json scripts section
-- Explain what each script does
-
-Example:
-| Script          | Description                                      |
-|-----------------|--------------------------------------------------|
-| \`npm run dev\`   | Starts development server on port 3000          |
-| \`npm run build\` | Creates optimized production build              |
-| \`npm run test\`  | Runs test suite with Jest                       |
-| \`npm run lint\`  | Runs ESLint to check code quality               |
-
-### Project Structure
-- Include ONLY if you can infer a clear, logical structure
-- Keep it high-level (don't list every file)
-
-Example:
-\`\`\`
-src/
-├── app/              # Next.js App Router pages
-├── components/       # Reusable React components
-├── lib/              # Utility functions and helpers
-├── hooks/            # Custom React hooks
-├── types/            # TypeScript type definitions
-└── utils/            # General utilities
-\`\`\`
-
-## 6. 📡 API Reference
-- Include ONLY if you detect clear API endpoints (e.g., /api folder, Express routes, OpenAPI spec)
-- Use a clean table format
-
-Example:
-## 📡 API Reference
-
-### Authentication
-| Method | Endpoint           | Description                  | Auth Required |
-|--------|-------------------|------------------------------|---------------|
-| POST   | \`/api/auth/login\`  | User login                   | No            |
-| POST   | \`/api/auth/signup\` | Create new account           | No            |
-| POST   | \`/api/auth/logout\` | User logout                  | Yes           |
-
-### Users
-| Method | Endpoint           | Description                  | Auth Required |
-|--------|-------------------|------------------------------|---------------|
-| GET    | \`/api/users/:id\`   | Get user by ID               | Yes           |
-| PUT    | \`/api/users/:id\`   | Update user profile          | Yes           |
-| DELETE | \`/api/users/:id\`   | Delete user account          | Yes           |
-
-## 7. 🧪 Testing
-- Include ONLY if test files or testing scripts are detected
-- Mention testing framework and how to run tests
-
-Example:
-\`\`\`bash
-# Run all tests
-npm test
-
-# Run tests in watch mode
-npm test -- --watch
-
-# Run tests with coverage
-npm test -- --coverage
-
-# Run E2E tests
-npm run test:e2e
-\`\`\`
-
-## 8. 🚢 Deployment
-- Include platform-specific instructions if deployment config detected
-- Mention environment requirements
-
-Example for Next.js:
-### Deploy to Vercel
-1. Push your code to GitHub
-2. Import project in Vercel dashboard
-3. Configure environment variables
-4. Deploy
-
-### Docker Deployment
-- Include ONLY if Dockerfile exists
-
-\`\`\`bash
-# Build image
-docker build -t [project-name] .
-
-# Run container
-docker run -p 3000:3000 [project-name]
-\`\`\`
-
-## 9. 🤝 Contributing
-- Include ONLY if CONTRIBUTING.md exists OR if you detect PR templates, commit conventions
-- Keep brief and link to detailed guides if they exist
-
-Example:
-Contributions are welcome! Please follow these guidelines:
-
-1. Fork the repository
-2. Create a feature branch (\`git checkout -b feature/amazing-feature\`)
-3. Commit your changes (\`git commit -m 'Add amazing feature'\`)
-4. Push to the branch (\`git push origin feature/amazing-feature\`)
-5. Open a Pull Request
-
-### Commit Convention
-We follow [Conventional Commits](https://www.conventionalcommits.org/):
-- \`feat:\` New features
-- \`fix:\` Bug fixes
-- \`docs:\` Documentation changes
-- \`style:\` Code style changes (formatting, etc.)
-- \`refactor:\` Code refactoring
-- \`test:\` Adding or updating tests
-- \`chore:\` Maintenance tasks
-
-## 10. 📄 License
-- Include ONLY if LICENSE file is detected
-- State the license type clearly
-
-Example:
-This project is licensed under the MIT License. See the [LICENSE](LICENSE) file for details.
-
-## 11. 👥 Authors & Acknowledgments
-- Include ONLY if you can extract author info from package.json or other metadata
-- Keep it concise
-
-Example:
-Created by [@username](https://github.com/username)
-
-Special thanks to:
-- [Contributor 1](https://github.com/contributor1) - Feature X
-- [Contributor 2](https://github.com/contributor2) - Bug fixes
+## 2. ✨ Features (only if 5+ specific features identified)
+## 3. 🛠️ Tech Stack (ALWAYS include if package.json detected)
+## 4. 🚀 Quick Start (Prerequisites, Installation, Environment Variables, Running)
+## 5. 💻 Development (Available Scripts, Project Structure)
+## 6. 📡 API Reference (only if clear API endpoints detected)
+## 7. 🧪 Testing (only if test files detected)
+## 8. 🚢 Deployment (only if deployment config detected)
+## 9. 🤝 Contributing (only if CONTRIBUTING.md exists)
+## 10. 📄 License (only if LICENSE file detected)
+## 11. 👥 Authors & Acknowledgments (only if author info available)
 
 ═══════════════════════════════════════════════════════════════════════════════
 ANALYSIS GUIDELINES
@@ -483,21 +275,18 @@ ANALYSIS GUIDELINES
    - Technical accuracy over marketing speak
    - Clear, concise explanations
    - Proper technical terminology
-   - No excessive emojis (use sparingly for visual hierarchy)
+   - Use emojis sparingly for visual hierarchy only
 
 ═══════════════════════════════════════════════════════════════════════════════
 PROJECT DATA FOR ANALYSIS
 ═══════════════════════════════════════════════════════════════════════════════
 
-### File Structure & Metadata:
-\`\`\`
-${readmeContent}
-\`\`\`
+### Repository: ${repoName}
 
-### Extracted Code Content:
-\`\`\`
-${extractedContent}
-\`\`\`
+${fileListSummary}
+
+### Selected Files for Deep Analysis:
+${selectedFilesContext}
 
 ═══════════════════════════════════════════════════════════════════════════════
 FINAL INSTRUCTIONS
@@ -507,7 +296,6 @@ Generate a publication-ready README.md that:
 ✅ Renders perfectly on GitHub (test all Markdown syntax)
 ✅ Contains ONLY verified, project-specific information
 ✅ Uses proper table formatting with aligned columns
-✅ Includes working reference links at the end
 ✅ Follows all formatting standards exactly as specified
 ✅ Has a professional, technical tone suitable for open-source
 ✅ Adapts structure based on project type and available data
@@ -517,7 +305,11 @@ Begin generating the README now. Output ONLY the Markdown content, starting with
 
   const genAI = new GoogleGenerativeAI(process.env.GOOGLE_API_KEY as string);
   const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
+  
   const result = await model.generateContent(prompt);
-  const reply = result.response.text();
-  return reply;
+  const readme = result.response.text();
+
+  if (progressCallback) await progressCallback(0.95);
+
+  return readme;
 }

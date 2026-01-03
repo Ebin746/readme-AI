@@ -1,122 +1,188 @@
-# 🚀 readme-AI
-[![Node.js Version](https://img.shields.io/badge/node->=18.17.0-brightgreen)](https://nodejs.org/)
+# ReadmeAi — AI-Powered README Generator 🚀
 
-*An AI-powered web application for generating comprehensive GitHub README files from repository URLs.*
+Generate publication-quality README.md files by analyzing a GitHub repository. ReadmeAi runs as a Next.js app with a GraphQL API, background job processing, and Google Generative AI for high-quality natural language generation.
 
-## ✨ Features
+---
 
-- **AI-driven Generation:** Automatically creates detailed READMEs by analyzing GitHub repository content.
-- **Asynchronous Job Processing:** Handles README generation tasks in the background with real-time progress updates.
-- **Real-time Status Tracking:** Utilizes WebSockets (via [Supabase][supabase]) and polling for live job status and progress display.
-- **User Authentication:** Integrates [Clerk][clerk] for secure user management and personalized experiences.
-- **API Usage Monitoring:** Tracks and displays daily API generation limits for both authenticated and unauthenticated users.
-- **Interactive UI:** Provides a user-friendly interface for inputting repository URLs, monitoring progress, and copying generated content.
-- **Robust Error Handling:** Displays clear error messages for invalid URLs, API failures, and other issues.
+## Table of Contents
+- ✅ Features
+- ⚙️ Quick start
+- 🔐 Required environment variables
+- 🧭 Architecture & how it works
+- 💡 Usage (GraphQL examples)
+- 🔧 Rate limiting & per-device quota
+- 🚀 Deployment (Vercel)
+- 🛠 Development tips & troubleshooting
+- 🛣 Roadmap / Improvements
+- 🤝 Contributing
+- 📄 License
 
-## 💻 Tech Stack
+---
 
-| Category         | Technologies                          |
-|:-----------------|:--------------------------------------|
-| Frontend         | [React][react], [Next.js][nextjs], [Tailwind CSS][tailwind] |
-| Backend & API    | [Node.js][nodejs], [Apollo Server][apollo], [GraphQL][graphql], [Supabase][supabase] |
-| AI / NLP         | [Google Generative AI][google-gemini], [Compromise][compromise] |
-| Database         | [Supabase][supabase]                  |
-| Tools & Language | [TypeScript][typescript], [ESLint][eslint], [PostCSS][postcss] |
-| Authentication   | [Clerk][clerk]                        |
-| Deployment       | [Vercel][vercel]                      |
+## ✅ Features
+- AI-driven README generation using Google Generative AI (Gemini models) ✍️
+- Background job manager + real-time progress updates via Supabase ✔️
+- Per-device daily quota (default: 5/day) enforced via Upstash Redis ⏱️
+- GraphQL API for starting jobs, getting status, and checking quota 📡
 
-## 🚀 Quick Start
+---
 
-To get this project up and running locally, follow these steps.
+## ⚙️ Quick start
 
-### Prerequisites
-
-Ensure you have the following installed:
-
-- [Node.js][nodejs] (version 18.17.0 or higher)
-- [npm][npm] (Node Package Manager) or [Yarn][yarn] or [pnpm][pnpm]
-
-### Installation
-
-1. Clone the repository:
-   ```bash
-   git clone https://github.com/username/readme-ai.git # Replace with actual repo URL
-   cd readme-ai
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   # or yarn install
-   # or pnpm install
-   ```
-
-### Environment Variables
-
-Create a `.env.local` file in the root directory and add the following environment variables. Obtain these from your [Supabase][supabase] project settings.
-
-```
-NEXT_PUBLIC_SUPABASE_URL=YOUR_SUPABASE_PROJECT_URL
-NEXT_PUBLIC_SUPABASE_ANON_KEY=YOUR_SUPABASE_ANON_KEY
-```
-
-> [!NOTE]
-> Additional environment variables related to [Clerk][clerk] or [Google Generative AI][google-gemini] might be required based on your specific setup. Refer to the respective documentation for details.
-
-## ⚙️ Development
-
-### Scripts
-
-The following scripts are available for development:
-
+1. Clone
 ```bash
-npm run dev     # Starts the development server
-npm run build   # Builds the application for production
-npm run start   # Starts the built application
-npm run lint    # Runs ESLint to check for code quality issues
+git clone https://github.com/<your-org>/readme-AI.git
+cd readme-AI/readme-Ai
 ```
 
-## 📚 API Reference
+2. Install
+```bash
+npm install
+```
 
-The application exposes a [GraphQL][graphql] endpoint for handling README generation and status queries.
+3. Add environment variables (see next section) to `.env.local`.
 
-| Method | Endpoint      | Description                                     |
-|:-------|:--------------|:------------------------------------------------|
-| `POST` | `/api/graphql` | Main GraphQL endpoint for all API interactions. |
+4. Local development
+```bash
+npm run dev
+# Open http://localhost:3000
+```
 
-### Key GraphQL Operations
+5. Build & start (production)
+```bash
+npm run build
+npm start
+```
 
-- **`mutation StartReadmeJob($repoUrl: String!)`**: Initiates the README generation process for a given repository URL.
-- **`query ReadmeJob($jobId: String!)`**: Fetches the current status, progress, and content of a specific README generation job.
-- **`mutation CancelReadmeJob($jobId: String!)`**: Attempts to cancel an ongoing README generation job.
-- **`query GetApiUsage`**: Retrieves the API usage statistics for the current user, including remaining generations and reset time.
+---
 
-## ☁️ Deployment
+## 🔐 Required environment variables
+Create `.env.local` and add:
 
-This project is configured for deployment on [Vercel][vercel]. A `vercel.json` file is present in the root directory.
+```env
+# Supabase (real-time updates + storage)
+NEXT_PUBLIC_SUPABASE_URL=your-supabase-url
+NEXT_PUBLIC_SUPABASE_ANON_KEY=your-supabase-anon-key
 
-To deploy your instance:
+# Google Generative AI
+GOOGLE_API_KEY=your-google-api-key
 
-1. Link your GitHub repository to [Vercel][vercel].
-2. [Vercel][vercel] will automatically detect the [Next.js][nextjs] project and deploy it.
-3. Ensure your [environment variables](#environment-variables) are configured correctly on [Vercel][vercel].
+# Upstash Redis (rate limiting)
+UPSTASH_REDIS_REST_URL=https://<id>.upstash.io
+UPSTASH_REDIS_REST_TOKEN=<upstash-token>
+```
 
-[react]: https://react.dev
-[nextjs]: https://nextjs.org
-[tailwind]: https://tailwindcss.com
-[nodejs]: https://nodejs.org
-[npm]: https://www.npmjs.com
-[yarn]: https://yarnpkg.com
-[pnpm]: https://pnpm.io
-[apollo]: https://www.apollographql.com/docs/apollo-server
-[graphql]: https://graphql.org
-[supabase]: https://supabase.com
-[google-gemini]: https://ai.google.dev/models/gemini
-[compromise]: https://compromise.dev
-[typescript]: https://www.typescriptlang.org
-[eslint]: https://eslint.org
-[postcss]: https://postcss.org
-[clerk]: https://clerk.com
-[vercel]: https://vercel.com
-[uuid]: https://www.npmjs.com/package/uuid
-[react-markdown]: https://www.npmjs.com/package/react-markdown
+> Tip: For Vercel, set the same values in project Environment Variables.
+
+---
+
+## 🧭 Architecture & how it works
+- Next.js app (React) front-end with a GraphQL endpoint at `/api/graphql` (Apollo Server).
+- When a README generation is requested:
+  - A job is started (`startReadmeJob`) and stored/processed by `jobManger.ts`.
+  - Worker code uses the Google Generative AI client in `readmeGenerator.ts` to create README content from repo files.
+  - Progress updates are published via Supabase and read by the client in real time.
+- Rate limiting:
+  - Implemented in `src/app/lib/ratelimit.ts` using Upstash Redis.
+  - Per-device quota is used (device cookie `rm_device_id` is created client-side).
+
+---
+
+## 💡 Usage (GraphQL examples)
+
+- Get API usage:
+```graphql
+query GetApiUsage {
+  userApiUsage {
+    remaining
+    limit
+    reset
+  }
+}
+```
+
+- Start a README generation:
+```graphql
+mutation StartReadmeJob($repoUrl: String!) {
+  startReadmeJob(repoUrl: $repoUrl) {
+    success
+    jobId
+    error
+  }
+}
+# variables: { "repoUrl": "https://github.com/username/repo" }
+```
+
+- Poll or subscribe to job status:
+```graphql
+query ReadmeJob($jobId: String!) {
+  readmeJob(jobId: $jobId) {
+    jobId
+    status
+    progress
+    content
+    error
+  }
+}
+```
+
+---
+
+## 🔧 Rate limiting & per-device quota ⚠️
+- Default: **5 daily README generations per device** (24-hour window).
+- Device id stored in a cookie named `rm_device_id` (set by the app). If multiple devices share an IP, they get separate quotas because the primary key is `device:<deviceId>`.
+- If you hit the quota:
+  - Delete your device cookie to create a new device id (not recommended for normal use).
+  - Or delete the device's Redis key from Upstash to reset the counter (see troubleshooting).
+
+Reset a specific key (example Node snippet):
+```js
+// quick script (requires UPSTASH env vars)
+import { Redis } from '@upstash/redis';
+const r = new Redis({ url: process.env.UPSTASH_REDIS_REST_URL, token: process.env.UPSTASH_REDIS_REST_TOKEN });
+await r.del("rate_limit:device:<deviceId>");
+```
+
+---
+
+## 🚀 Deployment (Vercel)
+1. Push branch to GitHub.
+2. Import project into Vercel.
+3. Configure Environment Variables (same as `.env.local`).
+4. Deploy — Vercel will run `npm run build`.
+
+---
+
+## 🛠 Development tips & troubleshooting
+- If GraphQL returns quota errors, check the `userApiUsage` response to view `remaining` and `reset`.
+- If realtime updates fail, ensure Supabase keys are correct and the project has Postgres + Realtime enabled.
+- Missing Google key → generation fails. Verify `GOOGLE_API_KEY`.
+- If you previously used Clerk or other auth and removed it, confirm no references remain in `src/app/layout.tsx` and `package.json`.
+
+---
+
+## 🛣 Roadmap / Improvements
+- Add optional account-based quotas (per-user limits) with authentication (Supabase auth or external provider).
+- Support other LLM providers (OpenAI, Anthropic) via plug-in model wrappers.
+- Add more robust error reporting and retry logic for long-running generation jobs.
+- Add end-to-end tests for GraphQL resolvers and job lifecycle.
+
+---
+
+## 🤝 Contributing
+- Fork, add a branch, open a PR.
+- Keep changes small and focused; include tests where applicable.
+- Please run `npm run lint` and ensure TypeScript checks pass.
+
+---
+
+## 📄 License
+MIT — see LICENSE file.
+
+---
+
+If you'd like, I can:
+- Commit this README as `README.md` in the repo, or
+- Generate an example README using the project's own generator to showcase its output (meta!).
+
+Which would you prefer next? ✅
